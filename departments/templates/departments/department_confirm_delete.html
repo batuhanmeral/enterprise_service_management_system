@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Departman Sil — Talep Yönetim Sistemi{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-5">
+
+        <h1 class="h4 mb-4">
+            <i class="bi bi-trash me-2"></i>Departman Sil
+        </h1>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <div class="alert alert-danger mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <strong>"{{ department.name }}"</strong> departmanını silmek istediğinize emin misiniz?
+                </div>
+
+                <p class="text-muted small mb-3">
+                    Bu işlem geri alınamaz. Departmana bağlı tüm kategoriler de silinecektir.
+                    Departmana atanmış kullanıcılar ve biletler sistemde kalır ancak departman bilgisi boş olur.
+                </p>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block">Bağlı Kategoriler</small>
+                    <span class="fw-medium">{{ department.categories.count }} adet</span>
+                </div>
+                <div class="mb-4">
+                    <small class="text-muted d-block">Bağlı Personel</small>
+                    <span class="fw-medium">{{ department.personnel.count }} kişi</span>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash me-1"></i>Evet, Sil
+                        </button>
+                        <a href="{% url 'departments:department_detail' department.pk %}" class="btn btn-outline-secondary">İptal</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

@@ -12,6 +12,14 @@ class Status(models.TextChoices):
     CLOSED = 'CLOSED', 'Kapalı'
 
 
+# Bilet öncelik seviyelerini tanımlayan enumeration sınıfı
+class Priority(models.TextChoices):
+    LOW = 'LOW', 'Düşük'
+    NORMAL = 'NORMAL', 'Normal'
+    HIGH = 'HIGH', 'Yüksek'
+    URGENT = 'URGENT', 'Acil'
+
+
 # Kullanıcı taleplerini temsil eden model
 class Ticket(models.Model):
 
@@ -44,6 +52,14 @@ class Ticket(models.Model):
         verbose_name='Durum',
     )
 
+    # Biletin öncelik seviyesi
+    priority = models.CharField(
+        max_length=10,
+        choices=Priority.choices,
+        default=Priority.NORMAL,
+        verbose_name='Öncelik',
+    )
+
     # Bilet kapatılırken eklenen çözüm açıklaması
     resolution_note = models.TextField(
         blank=True,
@@ -73,7 +89,7 @@ class Ticket(models.Model):
     # Talebi oluşturan kullanıcı
     sender = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL, # Kullanıcı silinse bile bilet sistemde kalır
+        on_delete=models.SET_NULL,  # Kullanıcı silinse bile bilet sistemde kalır
         null=True,
         related_name='sent_tickets',
         verbose_name='Talep Sahibi',
@@ -92,8 +108,9 @@ class Ticket(models.Model):
     # Talebin yönlendirildiği departman
     department = models.ForeignKey(
         'departments.Department',
-        on_delete=models.SET_NULL, # Departman silinse bile bilet sistemde kalır
+        on_delete=models.SET_NULL,  # Departman silinse bile bilet sistemde kalır
         null=True,
+        blank=True,
         related_name='tickets',
         verbose_name='Departman',
     )
@@ -101,7 +118,7 @@ class Ticket(models.Model):
     # Talebin alt kategorisi
     category = models.ForeignKey(
         'departments.Category',
-        on_delete=models.SET_NULL, # Kategori silinse bile bilet sistemde kalır
+        on_delete=models.SET_NULL,  # Kategori silinse bile bilet sistemde kalır
         null=True,
         blank=True,
         related_name='tickets',
@@ -142,3 +159,47 @@ class Ticket(models.Model):
         self.save(update_fields=[
             'status', 'resolution_note', 'closed_at', 'updated_at',
         ])
+
+
+# Bilet geçmişi — kimin, ne zaman, ne işlem yaptığını kaydeden audit log
+class TicketHistory(models.Model):
+
+    # İşlemin yapıldığı bilet
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,  # Bilet silinirse geçmişi de silinir
+        related_name='history',
+        verbose_name='Bilet',
+    )
+
+    # İşlemi yapan kullanıcı
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='ticket_actions',
+        verbose_name='İşlemi Yapan',
+    )
+
+    # Yapılan işlemin açıklaması
+    action = models.CharField(
+        max_length=200,
+        verbose_name='İşlem',
+    )
+
+    # İşlemin yapıldığı tarih
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='İşlem Tarihi',
+    )
+
+    # Modelin admin paneli ve veritabanı davranışlarını belirleyen meta-veri sınıfı
+    class Meta:
+        verbose_name = 'Bilet Geçmişi'
+        verbose_name_plural = 'Bilet Geçmişleri'
+        ordering = ['-created_at']
+
+    # Model objesinin sistemde metin olarak nasıl temsil edileceğini belirleyen fonksiyon
+    def __str__(self):
+        actor_name = self.actor.username if self.actor else 'Sistem'
+        return f"#{self.ticket_id} — {actor_name}: {self.action}"

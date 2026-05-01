@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}{{ profile_user.username }} — Talep Yönetim Sistemi{% endblock %}
+
+{% block content %}
+<div class="row">
+
+    <!-- Sol: Kullanıcı bilgileri -->
+    <div class="col-lg-8">
+
+        <!-- Başlık -->
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-dark text-white rounded-circle d-flex align-items-center justify-content-center me-3"
+                     style="width: 56px; height: 56px; font-size: 1.4rem;">
+                    {{ profile_user.first_name|first|default:profile_user.username|first|upper }}
+                </div>
+                <div>
+                    <h1 class="h4 mb-0">{{ profile_user.get_full_name|default:profile_user.username }}</h1>
+                    <small class="text-muted">@{{ profile_user.username }}</small>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'identity:user_update' profile_user.pk %}" class="btn btn-outline-dark btn-sm">
+                    <i class="bi bi-pencil me-1"></i>Düzenle
+                </a>
+                {% if profile_user != user %}
+                    <form method="post" action="{% url 'identity:user_delete' profile_user.pk %}"
+                          onsubmit="return confirm('Bu kullanıcıyı deaktif etmek istediğinize emin misiniz?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-person-x me-1"></i>Deaktif Et
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Kişisel bilgiler -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <h6 class="text-muted mb-3">Kişisel Bilgiler</h6>
+                <div class="row g-3">
+                    <div class="col-sm-6">
+                        <small class="text-muted d-block">E-posta</small>
+                        <span><i class="bi bi-envelope me-1"></i>{{ profile_user.email|default:"Belirtilmemiş" }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <small class="text-muted d-block">Telefon</small>
+                        <span><i class="bi bi-phone me-1"></i>{{ profile_user.phone|default:"Belirtilmemiş" }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <small class="text-muted d-block">Rol</small>
+                        <span><i class="bi bi-shield-check me-1"></i>{{ profile_user.get_role_display }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <small class="text-muted d-block">Departman</small>
+                        <span>
+                            <i class="bi bi-building me-1"></i>
+                            {% if profile_user.department %}
+                                <a href="{% url 'departments:department_detail' profile_user.department.pk %}" class="text-decoration-none">
+                                    {{ profile_user.department.name }}
+                                </a>
+                            {% else %}
+                                <span class="text-muted">Atanmamış</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- İstatistikler -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted mb-3">Bilet İstatistikleri</h6>
+                <div class="row g-3">
+                    <div class="col-sm-6">
+                        <small class="text-muted d-block">Gönderilen Biletler</small>
+                        <span class="fw-medium">{{ sent_tickets_count }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <small class="text-muted d-block">Atanan Biletler</small>
+                        <span class="fw-medium">{{ assigned_tickets_count }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sağ: Durum bilgileri -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted mb-3">Hesap Durumu</h6>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block">Durum</small>
+                    {% if profile_user.is_active %}
+                        <span class="badge bg-success">Aktif</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Pasif</span>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block">Kayıt Tarihi</small>
+                    <span><i class="bi bi-calendar me-1"></i>{{ profile_user.date_joined|date:"d.m.Y" }}</span>
+                </div>
+
+                <div class="mb-0">
+                    <small class="text-muted d-block">Son Giriş</small>
+                    <span>
+                        <i class="bi bi-clock me-1"></i>
+                        {% if profile_user.last_login %}
+                            {{ profile_user.last_login|date:"d.m.Y H:i" }}
+                        {% else %}
+                            <span class="text-muted">Hiç giriş yapmadı</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <a href="{% url 'identity:user_list' %}" class="btn btn-outline-secondary w-100 mt-3">
+            <i class="bi bi-arrow-left me-1"></i>Kullanıcı Listesine Dön
+        </a>
+    </div>
+
+</div>
+{% endblock %}

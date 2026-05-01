@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 10px;
+            color: #212529;
+            margin: 20px;
+        }
+        h1 {
+            font-size: 18px;
+            margin-bottom: 4px;
+        }
+        .meta {
+            color: #6c757d;
+            font-size: 9px;
+            margin-bottom: 16px;
+        }
+        .stats {
+            margin-bottom: 16px;
+        }
+        .stats span {
+            display: inline-block;
+            padding: 4px 10px;
+            margin-right: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        th {
+            background: #212529;
+            color: #fff;
+            padding: 6px 8px;
+            text-align: left;
+            font-size: 9px;
+        }
+        td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #dee2e6;
+            font-size: 9px;
+        }
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        .badge {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 8px;
+            color: #fff;
+        }
+        .bg-primary { background: #0d6efd; }
+        .bg-warning { background: #ffc107; color: #212529; }
+        .bg-secondary { background: #6c757d; }
+        .bg-danger { background: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>ESMS - Bilet Raporu</h1>
+    <div class="meta">Oluşturulma: {{ generated_at }}</div>
+
+    <div class="stats">
+        <span><b>Toplam:</b> {{ total }}</span>
+        <span><b>Açık:</b> {{ open_count }}</span>
+        <span><b>İşlemde:</b> {{ in_progress_count }}</span>
+        <span><b>Kapalı:</b> {{ closed_count }}</span>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Konu</th>
+                <th>Durum</th>
+                <th>Öncelik</th>
+                <th>Departman</th>
+                <th>Talep Sahibi</th>
+                <th>Üstlenen</th>
+                <th>Tarih</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.subject }}</td>
+                <td>{{ r.status }}</td>
+                <td>{{ r.priority }}</td>
+                <td>{{ r.department }}</td>
+                <td>{{ r.sender }}</td>
+                <td>{{ r.assigned_to }}</td>
+                <td>{{ r.created_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

@@ -3,9 +3,33 @@
 {% block title %}Raporlar — Talep Yönetim Sistemi{% endblock %}
 
 {% block content %}
-<h1 class="h4 mb-4">
-    <i class="bi bi-bar-chart-line me-2"></i>Raporlar ve İstatistikler
-</h1>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h4 mb-0">
+        <i class="bi bi-bar-chart-line me-2"></i>Raporlar ve İstatistikler
+    </h1>
+    <div class="dropdown">
+        <button class="btn btn-dark dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-download me-1"></i>Dışa Aktar
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+                <a class="dropdown-item" href="{% url 'reports:export_csv' %}">
+                    <i class="bi bi-filetype-csv me-2"></i>CSV
+                </a>
+            </li>
+            <li>
+                <a class="dropdown-item" href="{% url 'reports:export_excel' %}">
+                    <i class="bi bi-file-earmark-excel me-2"></i>Excel (.xlsx)
+                </a>
+            </li>
+            <li>
+                <a class="dropdown-item" href="{% url 'reports:export_pdf' %}">
+                    <i class="bi bi-file-earmark-pdf me-2"></i>PDF
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
 
 <!-- Özet kartları -->
 <div class="row g-3 mb-4">
@@ -42,7 +66,9 @@
         <div class="card border-0 shadow-sm">
             <div class="card-body">
                 <h6 class="text-muted mb-3">Aylık Bilet Trendi</h6>
-                <canvas id="monthlyChart" height="200"></canvas>
+                <div style="position: relative; height: 260px;">
+                    <canvas id="monthlyChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -51,7 +77,9 @@
         <div class="card border-0 shadow-sm">
             <div class="card-body">
                 <h6 class="text-muted mb-3">Durum Dağılımı</h6>
-                <canvas id="statusChart" height="200"></canvas>
+                <div style="position: relative; height: 260px;">
+                    <canvas id="statusChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -63,7 +91,9 @@
         <div class="card border-0 shadow-sm">
             <div class="card-body">
                 <h6 class="text-muted mb-3">Departman Karşılaştırması</h6>
-                <canvas id="deptChart" height="120"></canvas>
+                <div style="position: relative; height: 300px;">
+                    <canvas id="deptChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -212,34 +242,92 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
-    // Aylık bilet trend grafiği (çizgi)
-    new Chart(document.getElementById('monthlyChart'), {
+(function () {
+    // ── Tema algılama ────────────────────────────────────────────────────
+    function isDark() {
+        return document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    }
+
+    function gridColor() {
+        return isDark() ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+    }
+
+    function textColor() {
+        return isDark() ? '#adb5bd' : '#6c757d';
+    }
+
+    // ── Ortak seçenekler ─────────────────────────────────────────────────
+    const defaultFont = { family: "'Segoe UI', system-ui, sans-serif", size: 12 };
+
+    Chart.defaults.font = defaultFont;
+    Chart.defaults.color = textColor();
+    Chart.defaults.animation.duration = 800;
+    Chart.defaults.animation.easing = 'easeOutQuart';
+    Chart.defaults.plugins.tooltip.cornerRadius = 6;
+    Chart.defaults.plugins.tooltip.padding = 10;
+    Chart.defaults.plugins.tooltip.titleFont = { ...defaultFont, weight: '600' };
+
+    // ── 1. Aylık Bilet Trendi (çizgi, gradient dolgulu) ─────────────────
+    const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+    const gradient = monthlyCtx.createLinearGradient(0, 0, 0, 280);
+    gradient.addColorStop(0, isDark() ? 'rgba(13,110,253,0.35)' : 'rgba(13,110,253,0.2)');
+    gradient.addColorStop(1, 'rgba(13,110,253,0)');
+
+    const monthlyChart = new Chart(monthlyCtx, {
         type: 'line',
         data: {
             labels: {{ monthly_labels|safe }},
             datasets: [{
                 label: 'Oluşturulan Bilet',
                 data: {{ monthly_counts|safe }},
-                borderColor: '#212529',
-                backgroundColor: 'rgba(33, 37, 41, 0.1)',
+                borderColor: '#0d6efd',
+                backgroundColor: gradient,
                 fill: true,
-                tension: 0.3,
+                tension: 0.4,
+                borderWidth: 2.5,
+                pointBackgroundColor: '#0d6efd',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 7,
             }]
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: false } },
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function (ctx) {
+                            return ' ' + ctx.parsed.y + ' bilet';
+                        }
+                    }
+                }
+            },
             scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                x: {
+                    grid: { display: false },
+                    ticks: { color: textColor() },
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1, color: textColor() },
+                    grid: { color: gridColor() },
+                }
             }
         }
     });
 
-    // Durum dağılımı pasta grafiği
-    new Chart(document.getElementById('statusChart'), {
+    // ── 2. Durum Dağılımı (doughnut, iç sayı) ──────────────────────────
+    const statusChart = new Chart(document.getElementById('statusChart'), {
         type: 'doughnut',
         data: {
             labels: ['Açık', 'İşlemde', 'Kapalı'],
@@ -247,18 +335,53 @@
                 data: [{{ open_count }}, {{ in_progress_count }}, {{ closed_count }}],
                 backgroundColor: ['#0d6efd', '#ffc107', '#6c757d'],
                 borderWidth: 0,
+                hoverOffset: 8,
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
             plugins: {
-                legend: { position: 'bottom', labels: { padding: 16 } }
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 16,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        color: textColor(),
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (ctx) {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? Math.round(ctx.parsed / total * 100) : 0;
+                            return ' ' + ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+                        }
+                    }
+                }
             }
-        }
+        },
+        plugins: [{
+            // Ortaya toplam sayı yazan plugin
+            id: 'centerText',
+            afterDraw(chart) {
+                const { ctx, chartArea: { width, height, top } } = chart;
+                const total = chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                ctx.save();
+                ctx.font = 'bold 1.8rem "Segoe UI", system-ui, sans-serif';
+                ctx.fillStyle = textColor();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(total, width / 2, top + height / 2);
+                ctx.restore();
+            }
+        }]
     });
 
-    // Departman karşılaştırma çubuk grafiği
-    new Chart(document.getElementById('deptChart'), {
+    // ── 3. Departman Karşılaştırması (stacked bar, yuvarlak köşe) ───────
+    const deptChart = new Chart(document.getElementById('deptChart'), {
         type: 'bar',
         data: {
             labels: {{ dept_names|safe }},
@@ -267,29 +390,84 @@
                     label: 'Açık',
                     data: {{ dept_open|safe }},
                     backgroundColor: '#0d6efd',
+                    borderRadius: 3,
                 },
                 {
                     label: 'İşlemde',
                     data: {{ dept_in_progress|safe }},
                     backgroundColor: '#ffc107',
+                    borderRadius: 3,
                 },
                 {
                     label: 'Kapalı',
                     data: {{ dept_closed|safe }},
                     backgroundColor: '#6c757d',
+                    borderRadius: 3,
                 },
             ]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom', labels: { padding: 16 } }
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 16,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        color: textColor(),
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        afterBody: function (items) {
+                            const idx = items[0].dataIndex;
+                            const datasets = items[0].chart.data.datasets;
+                            let total = 0;
+                            datasets.forEach(ds => { total += ds.data[idx]; });
+                            return 'Toplam: ' + total;
+                        }
+                    }
+                }
             },
             scales: {
-                x: { stacked: true },
-                y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } }
+                x: {
+                    stacked: true,
+                    grid: { display: false },
+                    ticks: { color: textColor() },
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: { stepSize: 1, color: textColor() },
+                    grid: { color: gridColor() },
+                }
             }
         }
     });
+
+    // ── Dark mode geçişinde grafik renklerini güncelle ──────────────────
+    const observer = new MutationObserver(function () {
+        const c = textColor();
+        const g = gridColor();
+
+        [monthlyChart, statusChart, deptChart].forEach(chart => {
+            chart.options.plugins.legend.labels.color = c;
+            if (chart.options.scales) {
+                Object.values(chart.options.scales).forEach(scale => {
+                    if (scale.ticks) scale.ticks.color = c;
+                    if (scale.grid) scale.grid.color = g;
+                });
+            }
+            chart.update('none');
+        });
+    });
+
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-bs-theme'],
+    });
+})();
 </script>
 {% endblock %}

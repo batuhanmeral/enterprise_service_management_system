@@ -15,9 +15,7 @@
     </small>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- EMPLOYEE DASHBOARD -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 {% if user.role == 'EMPLOYEE' %}
     <div class="row g-3 mb-4">
         <div class="col-4">
@@ -77,9 +75,7 @@
         </div>
     </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- AGENT DASHBOARD -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 {% elif user.role == 'AGENT' %}
     <div class="row g-3 mb-4">
         <div class="col-4">
@@ -103,8 +99,8 @@
     </div>
 
     <div class="row g-3">
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm">
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm mb-3">
                 <div class="card-body">
                     <h6 class="text-muted mb-3">Üstlendiğim Biletler</h6>
                     {% if my_assigned %}
@@ -124,8 +120,8 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm">
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm mb-3">
                 <div class="card-body">
                     <h6 class="text-muted mb-3">Bekleyen Biletler (Havuz)</h6>
                     {% if waiting_tickets %}
@@ -142,13 +138,30 @@
                     {% endif %}
                 </div>
             </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    <h6 class="text-muted mb-3">Geçmişim (Kapalılar)</h6>
+                    {% if my_history %}
+                        <div class="list-group list-group-flush">
+                            {% for t in my_history %}
+                                <a href="{% url 'tickets:ticket_detail' t.pk %}" class="list-group-item list-group-item-action px-0">
+                                    <span>{{ t.subject }}</span>
+                                    <small class="text-muted d-block">{{ t.created_at|date:"d.m.Y" }}</small>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted text-center mb-0">Geçmiş biletiniz yok</p>
+                    {% endif %}
+                </div>
+            </div>
             {% include "partials/_recent_notifications.html" %}
         </div>
     </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- MANAGER DASHBOARD -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 {% elif user.role == 'MANAGER' %}
     <div class="row g-3 mb-4">
         <div class="col-3">
@@ -239,9 +252,7 @@
         </div>
     </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- ADMIN DASHBOARD -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
 {% elif user.role == 'ADMIN' %}
     <div class="row g-3 mb-4">
         <div class="col-3">
@@ -336,7 +347,15 @@
                 <i class="bi bi-bar-chart-line me-1"></i>Detaylı Raporlar
             </a>
 
-            {% include "partials/_recent_notifications.html" %}
+            {% if pending_users_count %}
+            <a href="{% url 'identity:user_list' %}" class="btn btn-warning w-100 mt-3 text-dark fw-bold">
+                <i class="bi bi-person-exclamation me-1"></i>{{ pending_users_count }} Onay Bekleyen Kullanıcı
+            </a>
+            {% endif %}
+
+            <div class="mt-4">
+                {% include "partials/_recent_notifications.html" %}
+            </div>
         </div>
     </div>
 {% endif %}

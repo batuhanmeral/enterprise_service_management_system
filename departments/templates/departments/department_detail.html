@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}{{ department.name }} — Talep Yönetim Sistemi{% endblock %}
+
+{% block content %}
+<div class="row">
+
+    <!-- Sol: Departman bilgileri -->
+    <div class="col-lg-8">
+
+        <!-- Başlık -->
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <h1 class="h4 mb-1">{{ department.name }}</h1>
+                <small class="text-muted">Oluşturulma: {{ department.created_at|date:"d.m.Y" }}</small>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'departments:department_update' department.pk %}" class="btn btn-outline-dark btn-sm">
+                    <i class="bi bi-pencil me-1"></i>Düzenle
+                </a>
+                <a href="{% url 'departments:department_delete' department.pk %}" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-trash me-1"></i>Sil
+                </a>
+            </div>
+        </div>
+
+        <!-- Açıklama -->
+        {% if department.description %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Açıklama</h6>
+                    <p class="mb-0">{{ department.description }}</p>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Kategoriler -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="text-muted mb-0">
+                        <i class="bi bi-tag me-1"></i>Kategoriler ({{ categories|length }})
+                    </h6>
+                    <a href="{% url 'departments:category_create' department.pk %}" class="btn btn-outline-dark btn-sm">
+                        <i class="bi bi-plus-lg me-1"></i>Kategori Ekle
+                    </a>
+                </div>
+                {% if categories %}
+                    <div class="list-group list-group-flush">
+                        {% for category in categories %}
+                            <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-medium">{{ category.name }}</span>
+                                    {% if category.description %}
+                                        <small class="text-muted d-block">{{ category.description }}</small>
+                                    {% endif %}
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-secondary">{{ category.tickets.count }} bilet</span>
+                                    <a href="{% url 'departments:category_update' category.pk %}" class="btn btn-outline-dark btn-sm" title="Düzenle">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'departments:category_delete' category.pk %}" class="btn btn-outline-danger btn-sm" title="Sil">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">Bu departmanda henüz kategori bulunmuyor.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Personel -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted mb-3">
+                    <i class="bi bi-people me-1"></i>Personel ({{ personnel|length }})
+                </h6>
+                {% if personnel %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Ad Soyad</th>
+                                    <th>Rol</th>
+                                    <th>E-posta</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for person in personnel %}
+                                    <tr>
+                                        <td>{{ person.get_full_name|default:person.username }}</td>
+                                        <td><span class="badge bg-secondary">{{ person.get_role_display }}</span></td>
+                                        <td class="text-muted">{{ person.email|default:"—" }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">Bu departmanda henüz personel bulunmuyor.</p>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Sağ: İstatistikler -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted mb-3">Detaylar</h6>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block">Yönetici</small>
+                    <span>
+                        <i class="bi bi-person-badge me-1"></i>
+                        {% if department.manager %}
+                            {{ department.manager.get_full_name|default:department.manager.username }}
+                        {% else %}
+                            <span class="text-muted">Atanmamış</span>
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block">Kategori Sayısı</small>
+                    <span><i class="bi bi-tag me-1"></i>{{ categories|length }}</span>
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block">Personel Sayısı</small>
+                    <span><i class="bi bi-people me-1"></i>{{ personnel|length }}</span>
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block">Toplam Bilet</small>
+                    <span><i class="bi bi-ticket-perforated me-1"></i>{{ department.tickets.count }}</span>
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block">Oluşturulma</small>
+                    <span><i class="bi bi-calendar me-1"></i>{{ department.created_at|date:"d.m.Y H:i" }}</span>
+                </div>
+
+                <div class="mb-0">
+                    <small class="text-muted d-block">Son Güncelleme</small>
+                    <span><i class="bi bi-clock me-1"></i>{{ department.updated_at|date:"d.m.Y H:i" }}</span>
+                </div>
+            </div>
+        </div>
+
+        <a href="{% url 'departments:department_list' %}" class="btn btn-outline-secondary w-100 mt-3">
+            <i class="bi bi-arrow-left me-1"></i>Departman Listesine Dön
+        </a>
+    </div>
+
+</div>
+{% endblock %}

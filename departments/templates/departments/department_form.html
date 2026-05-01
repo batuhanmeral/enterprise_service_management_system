@@ -1,13 +1,19 @@
 {% extends "base.html" %}
 
-{% block title %}Yeni Departman — Talep Yönetim Sistemi{% endblock %}
+{% block title %}
+    {% if object %}Departman Düzenle{% else %}Yeni Departman{% endif %} — Talep Yönetim Sistemi
+{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-5">
 
         <h1 class="h4 mb-4">
-            <i class="bi bi-plus-circle me-2"></i>Yeni Departman Ekle
+            {% if object %}
+                <i class="bi bi-pencil me-2"></i>Departmanı Düzenle
+            {% else %}
+                <i class="bi bi-plus-circle me-2"></i>Yeni Departman Ekle
+            {% endif %}
         </h1>
 
         <div class="card border-0 shadow-sm">
@@ -30,6 +36,22 @@
                         {% endif %}
                     </div>
 
+                    <!-- Yönetici -->
+                    <div class="mb-3">
+                        <label for="id_manager" class="form-label">Yönetici <small class="text-muted">(opsiyonel)</small></label>
+                        <select name="manager"
+                                id="id_manager"
+                                class="form-select">
+                            <option value="">Yönetici seçin...</option>
+                            {% for choice in form.manager.field.queryset %}
+                                <option value="{{ choice.pk }}"
+                                    {% if form.manager.value|stringformat:"s" == choice.pk|stringformat:"s" %}selected{% endif %}>
+                                    {{ choice.get_full_name|default:choice.username }} ({{ choice.get_role_display }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
                     <!-- Açıklama -->
                     <div class="mb-4">
                         <label for="id_description" class="form-label">Açıklama <small class="text-muted">(opsiyonel)</small></label>
@@ -45,7 +67,11 @@
                         <button type="submit" class="btn btn-dark">
                             <i class="bi bi-check-lg me-1"></i>Kaydet
                         </button>
-                        <a href="{% url 'departments:department_list' %}" class="btn btn-outline-secondary">İptal</a>
+                        {% if object %}
+                            <a href="{% url 'departments:department_detail' object.pk %}" class="btn btn-outline-secondary">İptal</a>
+                        {% else %}
+                            <a href="{% url 'departments:department_list' %}" class="btn btn-outline-secondary">İptal</a>
+                        {% endif %}
                     </div>
                 </form>
             </div>

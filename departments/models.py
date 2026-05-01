@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -17,6 +18,16 @@ class Department(models.Model):
         blank=True,
         default='',
         verbose_name='Açıklama',
+    )
+
+    # Departmanın yöneticisi
+    manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,  # Yönetici silinse bile departman kalır
+        null=True,
+        blank=True,
+        related_name='managed_departments',
+        verbose_name='Yönetici',
     )
 
     # Departmanın sisteme eklendiği tarih

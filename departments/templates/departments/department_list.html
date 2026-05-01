@@ -18,7 +18,11 @@
             <div class="col-md-6 col-lg-4">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
-                        <h5 class="card-title mb-1">{{ dept.name }}</h5>
+                        <h5 class="card-title mb-1">
+                            <a href="{% url 'departments:department_detail' dept.pk %}" class="text-decoration-none text-dark">
+                                {{ dept.name }}
+                            </a>
+                        </h5>
                         {% if dept.description %}
                             <p class="card-text text-muted small mb-3">{{ dept.description }}</p>
                         {% endif %}

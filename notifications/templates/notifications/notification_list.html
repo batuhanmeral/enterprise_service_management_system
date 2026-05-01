@@ -37,7 +37,12 @@
                         {% endif %}
                     </small>
                 </div>
-                <div class="flex-shrink-0">
+                <div class="flex-shrink-0 d-flex gap-1">
+                    <a href="{% url 'notifications:notification_detail' notification.pk %}"
+                       class="btn btn-sm btn-outline-dark"
+                       title="Detay">
+                        <i class="bi bi-eye"></i>
+                    </a>
                     {% if not notification.is_read %}
                         <a href="{% url 'notifications:notification_mark_read' notification.pk %}"
                            class="btn btn-sm btn-outline-secondary"
@@ -45,8 +50,14 @@
                             <i class="bi bi-check"></i>
                         </a>
                     {% else %}
-                        <i class="bi bi-check-circle text-muted"></i>
+                        <i class="bi bi-check-circle text-muted align-self-center ms-1"></i>
                     {% endif %}
+                    <form method="post" action="{% url 'notifications:notification_delete' notification.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Sil">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
         {% endfor %}

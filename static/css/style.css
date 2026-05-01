@@ -25,7 +25,12 @@ main {
 
 /* Kartlar */
 .card {
-    transition: box-shadow 0.15s ease;
+    padding: 24px;
+    min-height: 150px;
+    box-sizing: border-box;
+    transition: box-shadow 0.15s ease, border-color 0.15s;
+    border: 3px solid rgba(0, 0, 0, 0.15) !important;
+    border-radius: 12px;
 }
 
 .card:hover {
@@ -41,4 +46,71 @@ main {
 /* Boş durum ikonu */
 .display-4 {
     opacity: 0.3;
+}
+
+/* ── Dark Mode Geçişleri ──────────────────────────────────────────────────── */
+
+/* Dark mode toggle butonu */
+#theme-toggle {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+/* Dark modda kart hover gölgesi */
+[data-bs-theme="dark"] .card {
+    border: 3px solid rgba(255, 255, 255, 0.2) !important;
+}
+[data-bs-theme="dark"] .card:hover {
+    box-shadow: 0 0.25rem 0.75rem rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Dark modda shadow-sm ayarı */
+[data-bs-theme="dark"] .shadow-sm {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Dark modda form elemanları */
+[data-bs-theme="dark"] .form-control,
+[data-bs-theme="dark"] .form-select {
+    border-color: #495057;
+}
+
+/* Dark modda border badge */
+[data-bs-theme="dark"] .badge.border {
+    border-color: #6c757d !important;
+}
+
+/* Dark modda link renkleri */
+[data-bs-theme="dark"] a.text-dark {
+    color: #dee2e6 !important;
+}
+
+/* ── Hata Sayfaları ───────────────────────────────────────────────────────── */
+
+.error-page {
+    text-align: center;
+    padding: 4rem 1rem;
+}
+
+.error-page .error-code {
+    font-size: 6rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #212529;
+    opacity: 0.15;
+}
+
+[data-bs-theme="dark"] .error-page .error-code {
+    color: #f8f9fa;
+    opacity: 0.15;
+}
+
+.error-page .error-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
 }

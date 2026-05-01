@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if profile_user %}Kullanıcı Düzenle{% else %}Yeni Kullanıcı{% endif %} — Talep Yönetim Sistemi
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+
+        <h1 class="h4 mb-4">
+            {% if profile_user %}
+                <i class="bi bi-pencil me-2"></i>Kullanıcıyı Düzenle
+            {% else %}
+                <i class="bi bi-person-plus me-2"></i>Yeni Kullanıcı Ekle
+            {% endif %}
+        </h1>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <!-- Kullanıcı Adı -->
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">Kullanıcı Adı</label>
+                        <input type="text"
+                               name="username"
+                               id="id_username"
+                               class="form-control {% if form.username.errors %}is-invalid{% endif %}"
+                               value="{{ form.username.value|default:'' }}"
+                               placeholder="kullanici_adi"
+                               required>
+                        {% if form.username.errors %}
+                            <div class="invalid-feedback">{{ form.username.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    {% if not profile_user %}
+                        <!-- Şifre (sadece oluşturmada) -->
+                        <div class="mb-3">
+                            <label for="id_password" class="form-label">Şifre</label>
+                            <input type="password"
+                                   name="password"
+                                   id="id_password"
+                                   class="form-control {% if form.password.errors %}is-invalid{% endif %}"
+                                   placeholder="Şifre belirleyin"
+                                   required>
+                            {% if form.password.errors %}
+                                <div class="invalid-feedback">{{ form.password.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+
+                    <div class="row g-3 mb-3">
+                        <!-- Ad -->
+                        <div class="col-sm-6">
+                            <label for="id_first_name" class="form-label">Ad</label>
+                            <input type="text"
+                                   name="first_name"
+                                   id="id_first_name"
+                                   class="form-control"
+                                   value="{{ form.first_name.value|default:'' }}"
+                                   placeholder="Adı">
+                        </div>
+                        <!-- Soyad -->
+                        <div class="col-sm-6">
+                            <label for="id_last_name" class="form-label">Soyad</label>
+                            <input type="text"
+                                   name="last_name"
+                                   id="id_last_name"
+                                   class="form-control"
+                                   value="{{ form.last_name.value|default:'' }}"
+                                   placeholder="Soyadı">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <!-- E-posta -->
+                        <div class="col-sm-6">
+                            <label for="id_email" class="form-label">E-posta</label>
+                            <input type="email"
+                                   name="email"
+                                   id="id_email"
+                                   class="form-control"
+                                   value="{{ form.email.value|default:'' }}"
+                                   placeholder="ornek@sirket.com">
+                        </div>
+                        <!-- Telefon -->
+                        <div class="col-sm-6">
+                            <label for="id_phone" class="form-label">Telefon</label>
+                            <input type="text"
+                                   name="phone"
+                                   id="id_phone"
+                                   class="form-control"
+                                   value="{{ form.phone.value|default:'' }}"
+                                   placeholder="05XX XXX XX XX">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <!-- Rol -->
+                        <div class="col-sm-6">
+                            <label for="id_role" class="form-label">Rol</label>
+                            <select name="role"
+                                    id="id_role"
+                                    class="form-select {% if form.role.errors %}is-invalid{% endif %}"
+                                    required>
+                                {% for value, label in form.role.field.choices %}
+                                    <option value="{{ value }}"
+                                        {% if form.role.value == value %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if form.role.errors %}
+                                <div class="invalid-feedback">{{ form.role.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <!-- Departman -->
+                        <div class="col-sm-6">
+                            <label for="id_department" class="form-label">Departman</label>
+                            <select name="department"
+                                    id="id_department"
+                                    class="form-select">
+                                <option value="">Departman seçin...</option>
+                                {% for choice in form.department.field.queryset %}
+                                    <option value="{{ choice.pk }}"
+                                        {% if form.department.value|stringformat:"s" == choice.pk|stringformat:"s" %}selected{% endif %}>
+                                        {{ choice.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {% if profile_user %}
+                        <!-- Aktif/Pasif (sadece güncellemede) -->
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input type="checkbox"
+                                       name="is_active"
+                                       id="id_is_active"
+                                       class="form-check-input"
+                                       {% if form.is_active.value %}checked{% endif %}>
+                                <label for="id_is_active" class="form-check-label">Aktif Kullanıcı</label>
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <!-- Butonlar -->
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-dark">
+                            <i class="bi bi-check-lg me-1"></i>Kaydet
+                        </button>
+                        {% if profile_user %}
+                            <a href="{% url 'identity:user_detail' profile_user.pk %}" class="btn btn-outline-secondary">İptal</a>
+                        {% else %}
+                            <a href="{% url 'identity:user_list' %}" class="btn btn-outline-secondary">İptal</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

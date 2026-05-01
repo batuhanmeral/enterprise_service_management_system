@@ -12,6 +12,57 @@
     </a>
 </div>
 
+<!-- Filtre ve Sıralama -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body py-3">
+        <form method="get" class="row g-2 align-items-end">
+            <!-- Durum filtresi -->
+            <div class="col-md-3">
+                <label for="filter_status" class="form-label small text-muted mb-1">Durum</label>
+                <select name="status" id="filter_status" class="form-select form-select-sm">
+                    <option value="">Tümü</option>
+                    {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Öncelik filtresi -->
+            <div class="col-md-3">
+                <label for="filter_priority" class="form-label small text-muted mb-1">Öncelik</label>
+                <select name="priority" id="filter_priority" class="form-select form-select-sm">
+                    <option value="">Tümü</option>
+                    {% for value, label in priority_choices %}
+                        <option value="{{ value }}" {% if current_priority == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Sıralama -->
+            <div class="col-md-3">
+                <label for="filter_sort" class="form-label small text-muted mb-1">Sıralama</label>
+                <select name="sort" id="filter_sort" class="form-select form-select-sm">
+                    <option value="-created_at" {% if current_sort == '-created_at' %}selected{% endif %}>En Yeni</option>
+                    <option value="created_at" {% if current_sort == 'created_at' %}selected{% endif %}>En Eski</option>
+                    <option value="priority" {% if current_sort == 'priority' %}selected{% endif %}>Öncelik</option>
+                    <option value="status" {% if current_sort == 'status' %}selected{% endif %}>Durum</option>
+                    <option value="subject" {% if current_sort == 'subject' %}selected{% endif %}>Konu (A-Z)</option>
+                </select>
+            </div>
+
+            <!-- Filtrele butonu -->
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-dark btn-sm w-100">
+                    <i class="bi bi-funnel me-1"></i>Filtrele
+                </button>
+                <a href="{% url 'tickets:ticket_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% if tickets %}
     <div class="table-responsive">
         <table class="table table-hover align-middle">
@@ -20,6 +71,7 @@
                     <th>#</th>
                     <th>Konu</th>
                     <th>Departman</th>
+                    <th>Öncelik</th>
                     <th>Durum</th>
                     <th>Oluşturulma Tarihi</th>
                 </tr>
@@ -42,6 +94,17 @@
                                 {{ ticket.department.name }}
                             {% else %}
                                 <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if ticket.priority == 'URGENT' %}
+                                <span class="badge bg-danger">Acil</span>
+                            {% elif ticket.priority == 'HIGH' %}
+                                <span class="badge bg-warning text-dark">Yüksek</span>
+                            {% elif ticket.priority == 'NORMAL' %}
+                                <span class="badge bg-secondary">Normal</span>
+                            {% elif ticket.priority == 'LOW' %}
+                                <span class="badge bg-light text-dark border">Düşük</span>
                             {% endif %}
                         </td>
                         <td>
@@ -68,7 +131,7 @@
             <ul class="pagination justify-content-center">
                 {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&status={{ current_status }}&priority={{ current_priority }}&sort={{ current_sort }}">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
@@ -76,13 +139,13 @@
 
                 {% for num in page_obj.paginator.page_range %}
                     <li class="page-item {% if page_obj.number == num %}active{% endif %}">
-                        <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                        <a class="page-link" href="?page={{ num }}&status={{ current_status }}&priority={{ current_priority }}&sort={{ current_sort }}">{{ num }}</a>
                     </li>
                 {% endfor %}
 
                 {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&status={{ current_status }}&priority={{ current_priority }}&sort={{ current_sort }}">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>

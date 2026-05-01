@@ -13,6 +13,12 @@ urlpatterns = [
     # Bilet detayı
     path('<int:pk>/', views.TicketDetailView.as_view(), name='ticket_detail'),
 
+    # Bilet güncelleme
+    path('<int:pk>/update/', views.TicketUpdateView.as_view(), name='ticket_update'),
+
+    # Bilet silme
+    path('<int:pk>/delete/', views.ticket_delete_view, name='ticket_delete'),
+
     # Bilet üstlenme (İşlemde)
     path('<int:pk>/take/', views.ticket_take_view, name='ticket_take'),
 

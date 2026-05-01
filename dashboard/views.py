@@ -15,7 +15,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
-        # ── Çalışan (EMPLOYEE): Kendi biletleri ─────────────────────────────
+        # Çalışan (EMPLOYEE): Kendi biletleri
         if user.role == Role.EMPLOYEE:
             my_tickets = Ticket.objects.filter(sender=user)
             context['my_open'] = my_tickets.filter(status=Status.OPEN).count()
@@ -23,7 +23,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context['my_closed'] = my_tickets.filter(status=Status.CLOSED).count()
             context['recent_tickets'] = my_tickets.select_related('department')[:5]
 
-        # ── Personel (AGENT): Departman bilet havuzu ─────────────────────────
+        # Personel (AGENT): Departman bilet havuzu
         elif user.role == Role.AGENT:
             dept_tickets = Ticket.objects.filter(department=user.department)
             context['dept_open'] = dept_tickets.filter(status=Status.OPEN).count()
@@ -34,8 +34,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context['waiting_tickets'] = dept_tickets.filter(
                 status=Status.OPEN
             ).select_related('sender')[:5]
+            context['my_history'] = Ticket.objects.filter(
+                Q(sender=user) | Q(assigned_to=user)
+            ).exclude(status__in=[Status.OPEN, Status.IN_PROGRESS]).order_by('-created_at')[:5]
 
-        # ── Yönetici (MANAGER): Departman istatistikleri ─────────────────────
+        # Yönetici (MANAGER): Departman istatistikleri
         elif user.role == Role.MANAGER:
             dept_tickets = Ticket.objects.filter(department=user.department)
             context['dept_total'] = dept_tickets.count()
@@ -56,12 +59,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 'sender', 'assigned_to'
             )[:5]
 
-        # ── Admin: Sistem geneli ─────────────────────────────────────────────
+        # Admin: Sistem geneli
         elif user.role == Role.ADMIN:
             context['total_tickets'] = Ticket.objects.count()
             context['total_open'] = Ticket.objects.filter(status=Status.OPEN).count()
             context['total_in_progress'] = Ticket.objects.filter(status=Status.IN_PROGRESS).count()
             context['total_closed'] = Ticket.objects.filter(status=Status.CLOSED).count()
+
+            from identity.models import User
+            context['pending_users_count'] = User.objects.filter(is_active=False).count()
 
             # Departman özeti
             from departments.models import Department
