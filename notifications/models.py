@@ -42,6 +42,10 @@ class Notification(models.Model):
         verbose_name = 'Bildirim'
         verbose_name_plural = 'Bildirimler'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_read'], name='notif_recipient_isread_idx'),
+            models.Index(fields=['recipient', '-created_at'], name='notif_recipient_created_idx'),
+        ]
 
     # Model objesinin sistemde metin olarak nasıl temsil edileceğini belirleyen fonksiyon
     def __str__(self):

@@ -130,6 +130,12 @@ class Ticket(models.Model):
         verbose_name = 'Bilet'
         verbose_name_plural = 'Biletler'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['department', 'status'], name='ticket_dept_status_idx'),
+            models.Index(fields=['sender'], name='ticket_sender_idx'),
+            models.Index(fields=['assigned_to', 'status'], name='ticket_assigned_status_idx'),
+            models.Index(fields=['status', 'closed_at'], name='ticket_status_closedat_idx'),
+        ]
 
     # Model objesinin sistemde metin olarak nasıl temsil edileceğini belirleyen fonksiyon
     def __str__(self):
@@ -151,6 +157,13 @@ class Ticket(models.Model):
             'department', 'category', 'assigned_to', 'status', 'updated_at',
         ])
 
+    # Kapalı bileti yeniden aç (talep sahibi veya Admin)
+    def reopen(self):
+        self.status = Status.OPEN
+        self.assigned_to = None
+        self.closed_at = None
+        self.save(update_fields=['status', 'assigned_to', 'closed_at', 'updated_at'])
+
     # Bileti kapat ve çözüm notunu kaydet
     def close(self, resolution_note=''):
         self.status = Status.CLOSED
@@ -159,6 +172,44 @@ class Ticket(models.Model):
         self.save(update_fields=[
             'status', 'resolution_note', 'closed_at', 'updated_at',
         ])
+
+
+# Bilet yorum/mesajlaşma modeli — talep sahibi ile personel diyaloğu
+class TicketComment(models.Model):
+
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        related_name='comments',
+        verbose_name='Bilet',
+    )
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='ticket_comments',
+        verbose_name='Yazan',
+    )
+
+    content = models.TextField(
+        max_length=2000,
+        verbose_name='Yorum',
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Tarih',
+    )
+
+    class Meta:
+        verbose_name = 'Bilet Yorumu'
+        verbose_name_plural = 'Bilet Yorumları'
+        ordering = ['created_at']
+
+    def __str__(self):
+        author_name = self.author.username if self.author else 'Anonim'
+        return f"#{self.ticket_id} — {author_name}: {self.content[:50]}"
 
 
 # Bilet geçmişi — kimin, ne zaman, ne işlem yaptığını kaydeden audit log
@@ -198,6 +249,10 @@ class TicketHistory(models.Model):
         verbose_name = 'Bilet Geçmişi'
         verbose_name_plural = 'Bilet Geçmişleri'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['actor'], name='tickethist_actor_idx'),
+            models.Index(fields=['ticket', '-created_at'], name='tickethist_ticket_created_idx'),
+        ]
 
     # Model objesinin sistemde metin olarak nasıl temsil edileceğini belirleyen fonksiyon
     def __str__(self):

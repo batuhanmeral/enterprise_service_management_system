@@ -13,4 +13,8 @@ urlpatterns = [
     path('<int:pk>/close/', api_views.TicketCloseAPIView.as_view(), name='api_ticket_close'),
     # Bilet transfer (departmanlar arası)
     path('<int:pk>/transfer/', api_views.TicketTransferAPIView.as_view(), name='api_ticket_transfer'),
+    # Bilet yeniden açma (CLOSED → OPEN)
+    path('<int:pk>/reopen/', api_views.TicketReopenAPIView.as_view(), name='api_ticket_reopen'),
+    # Bilet yorumları
+    path('<int:pk>/comments/', api_views.TicketCommentListCreateAPIView.as_view(), name='api_ticket_comments'),
 ]

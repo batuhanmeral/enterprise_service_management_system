@@ -1,24 +1,26 @@
-from datetime import timedelta
+import calendar
 
-from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Avg, Count, ExpressionWrapper, F, Q, DurationField
 from django.utils import timezone
 
-from rest_framework.permissions import IsAuthenticated
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from tickets.models import Ticket, Status, Priority
+from config.permissions import IsManagerOrAdmin
+
+from tickets.models import Ticket, Status
 from departments.models import Department, Category
 from identity.models import User, Role
 
-# Export fonksiyonları mevcut views.py'den kullanılır (dosya döndürdükleri için)
-from .views import export_csv, export_excel, export_pdf
+from .views import export_csv, export_excel, export_pdf, _get_monthly_trend
 
 
 # Raporlama dashboard'u — tüm istatistikleri JSON olarak döndürür
+@extend_schema(tags=['reports'], responses={200: OpenApiResponse(description='Tüm istatistik JSON verisi')})
 class ReportDashboardAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # Raporlar gizli kurumsal istatistik içerir; sadece MANAGER ve ADMIN erişir.
+    permission_classes = [IsManagerOrAdmin]
 
     def get(self, request):
         data = {}
@@ -55,27 +57,33 @@ class ReportDashboardAPIView(APIView):
             for d in departments
         ]
 
-        # Departman bazlı ortalama çözüm süresi (saat cinsinden)
+        # Departman bazlı ortalama çözüm süresi — ticket_qs scope'una uyar
+        dept_resolution_qs = (
+            ticket_qs
+            .filter(status=Status.CLOSED, closed_at__isnull=False)
+            .values('department_id')
+            .annotate(
+                avg_duration=Avg(
+                    ExpressionWrapper(F('closed_at') - F('created_at'), output_field=DurationField())
+                ),
+                closed_count=Count('id'),
+            )
+        )
+        dept_resolution_map = {r['department_id']: r for r in dept_resolution_qs}
+
         dept_avg_resolution = []
         for dept in departments:
-            closed = Ticket.objects.filter(
-                department=dept,
-                status=Status.CLOSED,
-                closed_at__isnull=False,
-            )
-            if closed.exists():
-                durations = [
-                    (t.closed_at - t.created_at).total_seconds() / 3600
-                    for t in closed
-                ]
-                avg_hours = round(sum(durations) / len(durations), 1)
+            res = dept_resolution_map.get(dept.pk)
+            if res and res['avg_duration']:
+                avg_hours = round(res['avg_duration'].total_seconds() / 3600, 1)
+                closed_count = res['closed_count']
             else:
                 avg_hours = None
-
+                closed_count = 0
             dept_avg_resolution.append({
                 'name': dept.name,
                 'avg_hours': avg_hours,
-                'closed_count': closed.count(),
+                'closed_count': closed_count,
             })
 
         data['dept_avg_resolution'] = dept_avg_resolution
@@ -123,23 +131,26 @@ class ReportDashboardAPIView(APIView):
             for p in top_personnel
         ]
 
-        # Personel bazlı ortalama çözüm süresi
+        # Personel bazlı ortalama çözüm süresi — ticket_qs scope'una uyar
+        personnel_resolution_qs = (
+            ticket_qs
+            .filter(status=Status.CLOSED, closed_at__isnull=False, assigned_to__isnull=False)
+            .values('assigned_to_id')
+            .annotate(
+                avg_duration=Avg(
+                    ExpressionWrapper(F('closed_at') - F('created_at'), output_field=DurationField())
+                ),
+            )
+        )
+        personnel_resolution_map = {r['assigned_to_id']: r for r in personnel_resolution_qs}
+
         personnel_avg = []
         for p in top_personnel:
-            closed = Ticket.objects.filter(
-                assigned_to=p,
-                status=Status.CLOSED,
-                closed_at__isnull=False,
-            )
-            if closed.exists():
-                durations = [
-                    (t.closed_at - t.created_at).total_seconds() / 3600
-                    for t in closed
-                ]
-                avg_hours = round(sum(durations) / len(durations), 1)
+            res = personnel_resolution_map.get(p.pk)
+            if res and res['avg_duration']:
+                avg_hours = round(res['avg_duration'].total_seconds() / 3600, 1)
             else:
                 avg_hours = None
-
             personnel_avg.append({
                 'name': p.get_full_name() or p.username,
                 'avg_hours': avg_hours,
@@ -153,31 +164,12 @@ class ReportDashboardAPIView(APIView):
         data['in_progress_count'] = ticket_qs.filter(status=Status.IN_PROGRESS).count()
         data['closed_count'] = ticket_qs.filter(status=Status.CLOSED).count()
 
-        # Aylık bilet trend verisi (son 6 ay)
-        today = timezone.now()
-        monthly_data = []
-        for i in range(5, -1, -1):
-            month_start = (today - timedelta(days=i * 30)).replace(
-                day=1, hour=0, minute=0, second=0, microsecond=0,
-            )
-            if i > 0:
-                month_end = (today - timedelta(days=(i - 1) * 30)).replace(
-                    day=1, hour=0, minute=0, second=0, microsecond=0,
-                )
-            else:
-                month_end = today
-
-            count = ticket_qs.filter(
-                created_at__gte=month_start,
-                created_at__lt=month_end,
-            ).count()
-
-            monthly_data.append({
-                'label': month_start.strftime('%b %Y'),
-                'count': count,
-            })
-
-        data['monthly_trend'] = monthly_data
+        # Aylık bilet trend verisi (son 6 ay) — takvim tabanlı doğru ay hesabı
+        labels, counts = _get_monthly_trend(ticket_qs)
+        data['monthly_trend'] = [
+            {'label': label, 'count': count}
+            for label, count in zip(labels, counts)
+        ]
 
         # Departman karşılaştırma (çubuk grafik verisi)
         data['dept_comparison'] = [

@@ -5,11 +5,21 @@ from django.views.generic import ListView, CreateView, DetailView, UpdateView
 from django.urls import reverse_lazy
 from django.http import HttpResponseForbidden
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, Case, When, IntegerField
 
-from .models import Ticket, Status, Priority, TicketHistory
+from .models import Ticket, Status, Priority, TicketHistory, TicketComment
 from notifications.models import Notification
 from identity.models import Role
+
+
+# Önceliklerin sayısal sıralaması (LOW < NORMAL < HIGH < URGENT)
+PRIORITY_ORDER = Case(
+    When(priority=Priority.URGENT, then=4),
+    When(priority=Priority.HIGH, then=3),
+    When(priority=Priority.NORMAL, then=2),
+    When(priority=Priority.LOW, then=1),
+    output_field=IntegerField(),
+)
 
 
 # Audit log yardımcı fonksiyonu
@@ -50,14 +60,17 @@ class TicketListView(LoginRequiredMixin, ListView):
 
         # Sıralama (?sort=priority / ?sort=status / ?sort=created_at)
         sort = self.request.GET.get('sort', '-created_at')
-        allowed_sorts = {
-            'created_at': 'created_at',
-            '-created_at': '-created_at',
-            'priority': '-priority',
-            'status': 'status',
-            'subject': 'subject',
-        }
-        qs = qs.order_by(allowed_sorts.get(sort, '-created_at'))
+        if sort == 'priority':
+            # Yüksek → düşük sırala (URGENT > HIGH > NORMAL > LOW)
+            qs = qs.annotate(_priority_rank=PRIORITY_ORDER).order_by('-_priority_rank', '-created_at')
+        else:
+            allowed_sorts = {
+                'created_at': 'created_at',
+                '-created_at': '-created_at',
+                'status': 'status',
+                'subject': 'subject',
+            }
+            qs = qs.order_by(allowed_sorts.get(sort, '-created_at'))
 
         return qs
 
@@ -80,11 +93,17 @@ class TicketCreateView(LoginRequiredMixin, CreateView):
     success_url = reverse_lazy('tickets:ticket_list')
 
     def form_valid(self, form):
+        # Kategori-departman tutarlılığı: kategori başka bir departmana aitse hata
+        category = form.cleaned_data.get('category')
+        department = form.cleaned_data.get('department')
+        if category and department and category.department_id != department.pk:
+            form.add_error('category', 'Seçilen kategori bu departmana ait değil.')
+            return self.form_invalid(form)
+
         form.instance.sender = self.request.user
         form.instance.status = Status.OPEN
         response = super().form_valid(form)
 
-        # Audit log
         log_ticket_action(self.object, self.request.user, 'Bilet oluşturuldu.')
 
         messages.success(
@@ -118,6 +137,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['history'] = self.object.history.select_related('actor').all()
+        context['comments'] = self.object.comments.select_related('author').all()
         return context
 
 
@@ -289,10 +309,106 @@ class TicketUpdateView(LoginRequiredMixin, UpdateView):
         return reverse_lazy('tickets:ticket_detail', kwargs={'pk': self.object.pk})
 
     def form_valid(self, form):
+        category = form.cleaned_data.get('category')
+        department = form.cleaned_data.get('department')
+        if category and department and category.department_id != department.pk:
+            form.add_error('category', 'Seçilen kategori bu departmana ait değil.')
+            return self.form_invalid(form)
+
         response = super().form_valid(form)
         log_ticket_action(self.object, self.request.user, 'Bilet güncellendi.')
         messages.success(self.request, f'Bilet #{self.object.pk} başarıyla güncellendi.')
         return response
+
+
+# Bilet yorum ekleme — Talep sahibi veya ilgili personel
+@login_required
+def ticket_add_comment_view(request, pk):
+    if request.method != 'POST':
+        return HttpResponseForbidden('Sadece POST istekleri kabul edilir.')
+
+    ticket = get_object_or_404(Ticket, pk=pk)
+    user = request.user
+
+    # Erişim kontrolü: sender, aynı departman personeli/yöneticisi veya admin
+    if user.role == Role.ADMIN:
+        pass
+    elif user.role in (Role.AGENT, Role.MANAGER):
+        if ticket.department != user.department and ticket.sender != user:
+            return HttpResponseForbidden('Bu bilete yorum yapamazsınız.')
+    elif ticket.sender != user:
+        return HttpResponseForbidden('Bu bilete yorum yapamazsınız.')
+
+    content = request.POST.get('content', '').strip()
+    if not content:
+        messages.warning(request, 'Yorum boş olamaz.')
+        return redirect('tickets:ticket_detail', pk=ticket.pk)
+
+    if len(content) > 2000:
+        messages.warning(request, 'Yorum en fazla 2000 karakter olabilir.')
+        return redirect('tickets:ticket_detail', pk=ticket.pk)
+
+    TicketComment.objects.create(ticket=ticket, author=user, content=content)
+
+    # Talep sahibi yorum yazdıysa personele bildir; personel yazdıysa talep sahibine bildir
+    if user == ticket.sender:
+        recipient = ticket.assigned_to
+    else:
+        recipient = ticket.sender
+
+    if recipient:
+        Notification.objects.create(
+            recipient=recipient,
+            ticket=ticket,
+            message=(
+                f'"{ticket.subject}" (#{ticket.pk}) biletine '
+                f'{user.get_full_name() or user.username} yorum ekledi.'
+            ),
+        )
+
+    return redirect('tickets:ticket_detail', pk=ticket.pk)
+
+
+# Bilet yeniden açma — Talep sahibi veya Admin (CLOSED -> OPEN)
+@login_required
+def ticket_reopen_view(request, pk):
+    if request.method != 'POST':
+        return HttpResponseForbidden('Sadece POST istekleri kabul edilir.')
+
+    ticket = get_object_or_404(Ticket, pk=pk)
+    user = request.user
+
+    is_sender = (ticket.sender == user)
+    is_admin = (user.role == Role.ADMIN)
+
+    if not (is_sender or is_admin):
+        return HttpResponseForbidden('Sadece talep sahibi veya Admin bileti yeniden açabilir.')
+
+    if ticket.status != Status.CLOSED:
+        messages.warning(request, 'Sadece kapalı biletler yeniden açılabilir.')
+        return redirect('tickets:ticket_detail', pk=ticket.pk)
+
+    ticket.reopen()
+    log_ticket_action(ticket, user, 'Bilet yeniden açıldı.')
+
+    if ticket.department:
+        from identity.models import User as UserModel
+        agents = UserModel.objects.filter(
+            department=ticket.department,
+            role__in=[Role.AGENT, Role.MANAGER],
+            is_active=True,
+        ).exclude(pk=user.pk)
+        for agent in agents:
+            Notification.objects.create(
+                recipient=agent,
+                ticket=ticket,
+                message=(
+                    f'"{ticket.subject}" (#{ticket.pk}) bileti yeniden açıldı.'
+                ),
+            )
+
+    messages.success(request, f'Bilet #{ticket.pk} yeniden açıldı.')
+    return redirect('tickets:ticket_detail', pk=ticket.pk)
 
 
 # Bilet silme — Talep sahibi (OPEN), ilgili Manager veya Admin

@@ -1,7 +1,8 @@
 from django.contrib.auth import authenticate
 from django.db.models import Count
 
-from rest_framework import status
+from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.authtoken.models import Token
 from rest_framework.generics import (
     ListAPIView, CreateAPIView, RetrieveAPIView, UpdateAPIView,
@@ -22,6 +23,18 @@ from .serializers import (
 # Kimlik Doğrulama
 
 # Kullanıcı girişi — Token döndürür
+@extend_schema(
+    tags=['auth'],
+    request=LoginSerializer,
+    responses={
+        200: inline_serializer(
+            name='LoginResponse',
+            fields={'token': serializers.CharField(), 'user': UserSerializer()},
+        ),
+        401: OpenApiResponse(description='Geçersiz kullanıcı adı veya şifre.'),
+        403: OpenApiResponse(description='Hesap admin onayı bekliyor.'),
+    },
+)
 class LoginAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -58,6 +71,7 @@ class LoginAPIView(APIView):
 
 
 # Kullanıcı çıkışı — Token'ı siler
+@extend_schema(tags=['auth'], request=None, responses={200: OpenApiResponse(description='Çıkış yapıldı.')})
 class LogoutAPIView(APIView):
     def post(self, request):
         # Kullanıcının token'ını sil
@@ -68,6 +82,7 @@ class LogoutAPIView(APIView):
 # Kayıt (Register) — Admin Onaylı
 
 # Yeni kullanıcı kaydı — hesap pasif oluşturulur
+@extend_schema(tags=['auth'], request=RegisterSerializer, responses={201: OpenApiResponse(description='Kayıt başarılı, admin onayı bekleniyor.')})
 class RegisterAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -84,16 +99,22 @@ class RegisterAPIView(APIView):
 # Profil
 
 # Profil görüntüleme ve güncelleme
+@extend_schema(tags=['auth'])
 class ProfileAPIView(APIView):
+    serializer_class = ProfileUpdateSerializer
+
+    @extend_schema(responses={200: UserSerializer})
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
+    @extend_schema(request=ProfileUpdateSerializer, responses={200: UserSerializer})
     def put(self, request):
         serializer = ProfileUpdateSerializer(request.user, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(UserSerializer(request.user).data)
 
+    @extend_schema(request=ProfileUpdateSerializer, responses={200: UserSerializer})
     def patch(self, request):
         serializer = ProfileUpdateSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -102,6 +123,7 @@ class ProfileAPIView(APIView):
 
 
 # Profil silme (soft delete — hesabı deaktif eder ve token'ı siler)
+@extend_schema(tags=['auth'], request=None, responses={200: OpenApiResponse(description='Hesap silindi.')})
 class ProfileDeleteAPIView(APIView):
     def post(self, request):
         user = request.user
@@ -152,6 +174,7 @@ class UserUpdateAPIView(UpdateAPIView):
 
 
 # Kullanıcı silme (soft delete) — Sadece ADMIN
+@extend_schema(tags=['users'], request=None, responses={200: OpenApiResponse(description='Kullanıcı deaktif edildi.')})
 class UserDeleteAPIView(APIView):
     permission_classes = [IsAdmin]
 
@@ -172,10 +195,13 @@ class UserDeleteAPIView(APIView):
 
         user.is_active = False
         user.save(update_fields=['is_active'])
+        # Pasif hesabın oturumlarını / API token'ını da iptal et
+        Token.objects.filter(user=user).delete()
         return Response({'detail': f'"{user.username}" kullanıcısı deaktif edildi.'})
 
 
 # Kullanıcı onaylama — Sadece ADMIN (pasif hesabı aktif yapar)
+@extend_schema(tags=['users'], request=None, responses={200: OpenApiResponse(description='Kullanıcı onaylandı.')})
 class UserApproveAPIView(APIView):
     permission_classes = [IsAdmin]
 

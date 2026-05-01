@@ -1,4 +1,7 @@
-from django.contrib.auth import authenticate, login, logout
+import re
+
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, get_object_or_404
@@ -9,10 +12,11 @@ from django.contrib import messages
 from django import forms
 
 from .models import User, Role
+from tickets.models import TicketHistory
 
 
-# Kimlik Dogrulama
-
+# Telefon numarası TR formatı: 11 haneli, "0" ile başlamalı (ör. 05XX XXX XX XX)
+PHONE_DIGIT_COUNT = 11
 
 # Kullanıcı giriş formu
 class LoginForm(forms.Form):
@@ -32,12 +36,11 @@ class LoginForm(forms.Form):
         }),
     )
 
-
 # Kullanıcı giriş görünümü
 class LoginView(FormView):
     template_name = 'identity/login.html'
     form_class = LoginForm
-    success_url = reverse_lazy('tickets:ticket_list')
+    success_url = reverse_lazy('dashboard:home')
 
     def form_valid(self, form):
         username = form.cleaned_data['username']
@@ -78,9 +81,6 @@ def logout_view(request):
     return redirect('identity:login')
 
 
-# Kayıt (Register) — Admin Onaylı
-
-
 # Kayıt formu
 class RegisterForm(forms.ModelForm):
     password = forms.CharField(
@@ -100,11 +100,35 @@ class RegisterForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['username', 'first_name', 'last_name', 'email', 'phone', 'role', 'department']
-        widgets = {
-            'role': forms.Select(attrs={'class': 'form-select'}),
-            'department': forms.Select(attrs={'class': 'form-select'}),
-        }
+        # Kayıt sırasında rol/departman seçilemez — yetki yükseltme önlenir.
+        # Yeni hesaplar EMPLOYEE rolünde, departmansız ve pasif olarak oluşur.
+        fields = ['username', 'first_name', 'last_name', 'email', 'phone']
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username', '').strip()
+        if User.objects.filter(username__iexact=username).exists():
+            raise forms.ValidationError('Bu kullanıcı adı zaten kullanılıyor.')
+        return username
+
+    def clean_phone(self):
+        phone = self.cleaned_data.get('phone', '') or ''
+        phone = phone.strip()
+        if not phone:
+            return None
+        digits = re.sub(r'\D', '', phone)
+        if len(digits) != PHONE_DIGIT_COUNT:
+            raise forms.ValidationError(
+                f'Telefon numarası {PHONE_DIGIT_COUNT} haneli olmalıdır (ör. 05XX XXX XX XX).'
+            )
+        if not digits.startswith('0'):
+            raise forms.ValidationError('Telefon numarası "0" ile başlamalıdır.')
+        return digits
+
+    def clean_password(self):
+        password = self.cleaned_data.get('password', '')
+        if len(password) < 8:
+            raise forms.ValidationError('Şifre en az 8 karakter olmalıdır.')
+        return password
 
     def clean_password_confirm(self):
         password = self.cleaned_data.get('password')
@@ -116,12 +140,14 @@ class RegisterForm(forms.ModelForm):
     def save(self, commit=True):
         user = super().save(commit=False)
         user.set_password(self.cleaned_data['password'])
-        # Hesap pasif olarak oluşturulur — admin onayı gerekir
+        # Hesap pasif olarak oluşturulur — admin onayı gerekir.
+        # Rol/departman güvenlik gereği serializer'da değil burada zorlanır.
         user.is_active = False
+        user.role = Role.EMPLOYEE
+        user.department = None
         if commit:
             user.save()
         return user
-
 
 # Kayıt view'ı — anonim kullanıcılar için
 class RegisterView(FormView):
@@ -140,16 +166,23 @@ class RegisterView(FormView):
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            return redirect('tickets:ticket_list')
+            return redirect('dashboard:home')
         return super().dispatch(request, *args, **kwargs)
-
-
-# Profil
 
 
 # Kullanıcı profil görünümü
 class ProfileView(LoginRequiredMixin, TemplateView):
     template_name = 'identity/profile.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['activity'] = (
+            TicketHistory.objects
+            .filter(actor=self.request.user)
+            .select_related('ticket')
+            .order_by('-created_at')[:30]
+        )
+        return context
 
 
 # Kullanıcı bilgilerini güncelleme
@@ -163,9 +196,34 @@ def profile_update_view(request):
     user.last_name = request.POST.get('last_name', '').strip()
     user.email = request.POST.get('email', '').strip()
     user.phone = request.POST.get('phone', '').strip() or None
-    user.save(update_fields=['first_name', 'last_name', 'email', 'phone'])
+    update_fields = ['first_name', 'last_name', 'email', 'phone']
 
+    if 'avatar' in request.FILES:
+        user.avatar = request.FILES['avatar']
+        update_fields.append('avatar')
+
+    user.save(update_fields=update_fields)
     messages.success(request, 'Profil bilgileriniz başarıyla güncellendi.')
+    return redirect('identity:profile')
+
+
+# Kullanıcı kendi şifresini değiştirir
+@login_required
+def password_change_view(request):
+    if request.method != 'POST':
+        return redirect('identity:profile')
+
+    form = PasswordChangeForm(user=request.user, data=request.POST)
+    if form.is_valid():
+        user = form.save()
+        # Oturumun geçersizleşmemesi için session hash'i güncelle
+        update_session_auth_hash(request, user)
+        messages.success(request, 'Şifreniz başarıyla değiştirildi.')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(request, f'{error}')
+
     return redirect('identity:profile')
 
 
@@ -186,10 +244,6 @@ def profile_delete_view(request):
     messages.info(request, f'"{username}" hesabınız başarıyla silindi.')
     return redirect('identity:login')
 
-
-# Admin/Yönetici: Kullanıcı Yönetimi
-
-
 # Yetki kontrolü mixin — Sadece ADMIN rolü erişebilir
 class AdminRequiredMixin(LoginRequiredMixin):
     def dispatch(self, request, *args, **kwargs):
@@ -199,6 +253,15 @@ class AdminRequiredMixin(LoginRequiredMixin):
             return HttpResponseForbidden('Bu sayfaya erişim yetkiniz bulunmamaktadır.')
         return super().dispatch(request, *args, **kwargs)
 
+
+# MANAGER veya ADMIN rolündeki kullanıcılar erişebilir
+class ManagerOrAdminRequiredMixin(LoginRequiredMixin):
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        if request.user.role not in (Role.MANAGER, Role.ADMIN):
+            return HttpResponseForbidden('Bu sayfaya erişim yetkiniz bulunmamaktadır.')
+        return super().dispatch(request, *args, **kwargs)
 
 # Kullanıcı listesi — Sadece ADMIN
 class UserListView(AdminRequiredMixin, ListView):
@@ -213,7 +276,6 @@ class UserListView(AdminRequiredMixin, ListView):
         context['pending_count'] = User.objects.filter(is_active=False).count()
         return context
 
-
 # Kullanıcı detay — Sadece ADMIN
 class UserDetailView(AdminRequiredMixin, DetailView):
     model = User
@@ -225,8 +287,13 @@ class UserDetailView(AdminRequiredMixin, DetailView):
         profile_user = self.object
         context['sent_tickets_count'] = profile_user.sent_tickets.count()
         context['assigned_tickets_count'] = profile_user.assigned_tickets.count()
+        context['activity'] = (
+            TicketHistory.objects
+            .filter(actor=profile_user)
+            .select_related('ticket')
+            .order_by('-created_at')[:30]
+        )
         return context
-
 
 # Kullanıcı oluşturma formu (Admin tarafından)
 class UserCreateForm(forms.ModelForm):
@@ -249,7 +316,6 @@ class UserCreateForm(forms.ModelForm):
             user.save()
         return user
 
-
 # Yeni kullanıcı oluşturma — Sadece ADMIN
 class UserCreateView(AdminRequiredMixin, CreateView):
     model = User
@@ -262,13 +328,11 @@ class UserCreateView(AdminRequiredMixin, CreateView):
         messages.success(self.request, f'"{self.object.username}" kullanıcısı başarıyla oluşturuldu.')
         return response
 
-
 # Kullanıcı güncelleme formu (şifresiz)
 class UserUpdateForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ['username', 'first_name', 'last_name', 'email', 'phone', 'role', 'department', 'is_active']
-
 
 # Kullanıcı güncelleme — Sadece ADMIN
 class UserUpdateView(AdminRequiredMixin, UpdateView):
@@ -284,7 +348,6 @@ class UserUpdateView(AdminRequiredMixin, UpdateView):
         response = super().form_valid(form)
         messages.success(self.request, f'"{self.object.username}" kullanıcısı başarıyla güncellendi.')
         return response
-
 
 # Kullanıcı silme (deaktif) — Sadece ADMIN
 @login_required
@@ -305,10 +368,12 @@ def user_delete_view(request, pk):
     username = user.username
     user.is_active = False
     user.save(update_fields=['is_active'])
+    # Pasif hesabın API token'ını iptal et (varsa)
+    from rest_framework.authtoken.models import Token
+    Token.objects.filter(user=user).delete()
 
     messages.success(request, f'"{username}" kullanıcısı deaktif edildi.')
     return redirect('identity:user_list')
-
 
 # Kullanıcı onaylama — Sadece ADMIN (pasif hesabı aktif yapar)
 @login_required

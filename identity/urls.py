@@ -9,6 +9,7 @@ urlpatterns = [
     path('register/', views.RegisterView.as_view(), name='register'),
     path('profile/', views.ProfileView.as_view(), name='profile'),
     path('profile/update/', views.profile_update_view, name='profile_update'),
+    path('profile/password/', views.password_change_view, name='password_change'),
     path('profile/delete/', views.profile_delete_view, name='profile_delete'),
     # Kullanıcı yönetimi (Sadece ADMIN)
     path('users/', views.UserListView.as_view(), name='user_list'),

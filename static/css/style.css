@@ -48,7 +48,7 @@ main {
     opacity: 0.3;
 }
 
-/* ── Dark Mode Geçişleri ──────────────────────────────────────────────────── */
+/* Dark Mode Geçişleri */
 
 /* Dark mode toggle butonu */
 #theme-toggle {
@@ -89,7 +89,7 @@ main {
     color: #dee2e6 !important;
 }
 
-/* ── Hata Sayfaları ───────────────────────────────────────────────────────── */
+/* Hata Sayfaları */
 
 .error-page {
     text-align: center;

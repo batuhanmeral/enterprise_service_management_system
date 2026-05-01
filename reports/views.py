@@ -1,36 +1,55 @@
+import calendar
 import csv
 import io
-from datetime import timedelta
+from datetime import date
 
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.template.loader import render_to_string
 from django.views.generic import TemplateView
-from django.db.models import Count, Q
+from django.db.models import Avg, Count, ExpressionWrapper, F, Q, DurationField
 from django.utils import timezone
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
-from xhtml2pdf import pisa
+from weasyprint import HTML
 
 from tickets.models import Ticket, Status, Priority
 from departments.models import Department, Category
 from identity.models import User, Role
+from identity.views import ManagerOrAdminRequiredMixin
 
 
-# Raporlama dashboard'u — istatistiksel verileri hesaplar ve template'e aktarır
-class ReportDashboardView(LoginRequiredMixin, TemplateView):
+# Sadece MANAGER veya ADMIN raporlara erişebilir; AGENT/EMPLOYEE engellenir.
+def _require_manager_or_admin(user):
+    return user.is_authenticated and user.role in (Role.MANAGER, Role.ADMIN)
+
+
+# Raporlama dashboard'u — sadece MANAGER ve ADMIN erişebilir
+class ReportDashboardView(ManagerOrAdminRequiredMixin, TemplateView):
     template_name = 'reports/dashboard.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
+        # Tarih aralığı filtresi (?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD)
+        date_from_str = self.request.GET.get('date_from', '')
+        date_to_str = self.request.GET.get('date_to', '')
+        date_from = _parse_date(date_from_str)
+        date_to = _parse_date(date_to_str)
+        context['date_from'] = date_from_str
+        context['date_to'] = date_to_str
+
         dept_qs = Department.objects.all()
         cat_qs = Category.objects.all()
         user_qs = User.objects.filter(role__in=[Role.AGENT, Role.MANAGER])
         ticket_qs = Ticket.objects.all()
+
+        if date_from:
+            ticket_qs = ticket_qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            ticket_qs = ticket_qs.filter(created_at__date__lte=date_to)
 
         if user.role == Role.MANAGER:
             dept_qs = dept_qs.filter(id=user.department_id)
@@ -50,28 +69,34 @@ class ReportDashboardView(LoginRequiredMixin, TemplateView):
 
         context['departments'] = departments
 
-        # Departman bazlı ortalama çözüm süresi (saat cinsinden)
+        # Departman bazlı ortalama çözüm süresi — tek sorgu ile hesaplanır.
+        # ticket_qs üzerinden hesaplanır → manager scope ve tarih filtresine uyar.
+        dept_resolution_qs = (
+            ticket_qs
+            .filter(status=Status.CLOSED, closed_at__isnull=False)
+            .values('department_id')
+            .annotate(
+                avg_duration=Avg(
+                    ExpressionWrapper(F('closed_at') - F('created_at'), output_field=DurationField())
+                ),
+                closed_count=Count('id'),
+            )
+        )
+        dept_resolution_map = {r['department_id']: r for r in dept_resolution_qs}
+
         dept_avg_resolution = []
         for dept in departments:
-            closed = Ticket.objects.filter(
-                department=dept,
-                status=Status.CLOSED,
-                closed_at__isnull=False,
-            )
-            if closed.exists():
-                # closed_at - created_at farkının ortalaması
-                durations = [
-                    (t.closed_at - t.created_at).total_seconds() / 3600
-                    for t in closed
-                ]
-                avg_hours = sum(durations) / len(durations)
+            res = dept_resolution_map.get(dept.pk)
+            if res and res['avg_duration']:
+                avg_hours = round(res['avg_duration'].total_seconds() / 3600, 1)
+                closed_count = res['closed_count']
             else:
                 avg_hours = None
-
+                closed_count = 0
             dept_avg_resolution.append({
                 'name': dept.name,
-                'avg_hours': round(avg_hours, 1) if avg_hours else None,
-                'closed_count': closed.count(),
+                'avg_hours': avg_hours,
+                'closed_count': closed_count,
             })
 
         context['dept_avg_resolution'] = dept_avg_resolution
@@ -106,26 +131,29 @@ class ReportDashboardView(LoginRequiredMixin, TemplateView):
 
         context['top_personnel'] = top_personnel
 
-        # Personel bazlı ortalama çözüm süresi
+        # Personel bazlı ortalama çözüm süresi — ticket_qs scope'una uyar
+        personnel_resolution_qs = (
+            ticket_qs
+            .filter(status=Status.CLOSED, closed_at__isnull=False, assigned_to__isnull=False)
+            .values('assigned_to_id')
+            .annotate(
+                avg_duration=Avg(
+                    ExpressionWrapper(F('closed_at') - F('created_at'), output_field=DurationField())
+                ),
+            )
+        )
+        personnel_resolution_map = {r['assigned_to_id']: r for r in personnel_resolution_qs}
+
         personnel_avg = []
         for p in top_personnel:
-            closed = Ticket.objects.filter(
-                assigned_to=p,
-                status=Status.CLOSED,
-                closed_at__isnull=False,
-            )
-            if closed.exists():
-                durations = [
-                    (t.closed_at - t.created_at).total_seconds() / 3600
-                    for t in closed
-                ]
-                avg_hours = sum(durations) / len(durations)
+            res = personnel_resolution_map.get(p.pk)
+            if res and res['avg_duration']:
+                avg_hours = round(res['avg_duration'].total_seconds() / 3600, 1)
             else:
                 avg_hours = None
-
             personnel_avg.append({
                 'name': p.get_full_name() or p.username,
-                'avg_hours': round(avg_hours, 1) if avg_hours else None,
+                'avg_hours': avg_hours,
             })
 
         context['personnel_avg'] = personnel_avg
@@ -138,32 +166,8 @@ class ReportDashboardView(LoginRequiredMixin, TemplateView):
         context['in_progress_count'] = ticket_qs.filter(status=Status.IN_PROGRESS).count()
         context['closed_count'] = ticket_qs.filter(status=Status.CLOSED).count()
 
-        # Aylık bilet trend verisi (son 6 ay)
-        today = timezone.now()
-        monthly_data = []
-        for i in range(5, -1, -1):
-            month_start = (today - timedelta(days=i * 30)).replace(
-                day=1, hour=0, minute=0, second=0, microsecond=0,
-            )
-            if i > 0:
-                month_end = (today - timedelta(days=(i - 1) * 30)).replace(
-                    day=1, hour=0, minute=0, second=0, microsecond=0,
-                )
-            else:
-                month_end = today
-
-            count = ticket_qs.filter(
-                created_at__gte=month_start,
-                created_at__lt=month_end,
-            ).count()
-
-            monthly_data.append({
-                'label': month_start.strftime('%b %Y'),
-                'count': count,
-            })
-
-        context['monthly_labels'] = [m['label'] for m in monthly_data]
-        context['monthly_counts'] = [m['count'] for m in monthly_data]
+        # Aylık bilet trend verisi (son 6 ay) — takvim tabanlı doğru ay hesabı
+        context['monthly_labels'], context['monthly_counts'] = _get_monthly_trend(ticket_qs)
 
         # Departman karşılaştırma verisi (çubuk grafik için)
         context['dept_names'] = [d.name for d in departments]
@@ -174,16 +178,53 @@ class ReportDashboardView(LoginRequiredMixin, TemplateView):
         return context
 
 
-# Ortak veri toplama fonksiyonu
+# Ortak yardımcı fonksiyonlar
 
-def _get_ticket_export_data(user):
-    """Dışa aktarım için bilet verilerini toplar."""
+def _parse_date(date_str):
+    """YYYY-MM-DD formatındaki string'i date nesnesine dönüştürür."""
+    if not date_str:
+        return None
+    try:
+        return date.fromisoformat(date_str)
+    except ValueError:
+        return None
+
+
+def _get_monthly_trend(ticket_qs):
+    """Son 6 ayın bilet sayılarını gerçek takvim aylarına göre hesaplar."""
+    today = timezone.now()
+    labels = []
+    counts = []
+    for i in range(5, -1, -1):
+        total_months = today.year * 12 + today.month - 1 - i
+        year = total_months // 12
+        month = total_months % 12 + 1
+        _, last_day = calendar.monthrange(year, month)
+        month_start = today.replace(year=year, month=month, day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_end = today.replace(year=year, month=month, day=last_day, hour=23, minute=59, second=59, microsecond=0)
+        count = ticket_qs.filter(created_at__gte=month_start, created_at__lte=month_end).count()
+        labels.append(month_start.strftime('%b %Y'))
+        counts.append(count)
+    return labels, counts
+
+
+def _get_ticket_export_data(user, date_from=None, date_to=None):
+    """Dışa aktarım için bilet verilerini toplar (rol bazlı kapsamla)."""
     qs = Ticket.objects.select_related(
         'sender', 'assigned_to', 'department', 'category',
     ).order_by('-created_at')
 
+    # Rol bazlı kapsam: ADMIN tümü, MANAGER kendi departmanı; AGENT/EMPLOYEE bu noktaya
+    # ulaşamamalı (view-seviyesinde 403 döner) ama defansif filtre eklenir.
     if user.role == Role.MANAGER:
         qs = qs.filter(department=user.department)
+    elif user.role != Role.ADMIN:
+        qs = qs.none()
+
+    if date_from:
+        qs = qs.filter(created_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(created_at__date__lte=date_to)
 
     rows = []
     for t in qs:
@@ -209,14 +250,18 @@ EXPORT_HEADERS = [
 ]
 
 
-# CSV Dışa Aktarım
+# CSV Dışa Aktarım — Sadece MANAGER/ADMIN
 
 @login_required
 def export_csv(request):
-    rows = _get_ticket_export_data(request.user)
+    if not _require_manager_or_admin(request.user):
+        return HttpResponseForbidden('Bu rapora erişim yetkiniz bulunmamaktadır.')
+    date_from = _parse_date(request.GET.get('date_from', ''))
+    date_to = _parse_date(request.GET.get('date_to', ''))
+    rows = _get_ticket_export_data(request.user, date_from, date_to)
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="bilet_raporu.csv"'
-    response.write('\ufeff')  # BOM for Excel UTF-8 compatibility
+    response.write('﻿')  # BOM for Excel UTF-8 compatibility
 
     writer = csv.writer(response)
     writer.writerow(EXPORT_HEADERS)
@@ -229,11 +274,15 @@ def export_csv(request):
     return response
 
 
-# Excel Dışa Aktarım
+# Excel Dışa Aktarım — Sadece MANAGER/ADMIN
 
 @login_required
 def export_excel(request):
-    rows = _get_ticket_export_data(request.user)
+    if not _require_manager_or_admin(request.user):
+        return HttpResponseForbidden('Bu rapora erişim yetkiniz bulunmamaktadır.')
+    date_from = _parse_date(request.GET.get('date_from', ''))
+    date_to = _parse_date(request.GET.get('date_to', ''))
+    rows = _get_ticket_export_data(request.user, date_from, date_to)
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -275,11 +324,15 @@ def export_excel(request):
     return response
 
 
-# PDF Dışa Aktarım
+# PDF Dışa Aktarım — Sadece MANAGER/ADMIN
 
 @login_required
 def export_pdf(request):
-    rows = _get_ticket_export_data(request.user)
+    if not _require_manager_or_admin(request.user):
+        return HttpResponseForbidden('Bu rapora erişim yetkiniz bulunmamaktadır.')
+    date_from = _parse_date(request.GET.get('date_from', ''))
+    date_to = _parse_date(request.GET.get('date_to', ''))
+    rows = _get_ticket_export_data(request.user, date_from, date_to)
 
     # İstatistikler
     total = len(rows)
@@ -299,5 +352,5 @@ def export_pdf(request):
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = 'attachment; filename="bilet_raporu.pdf"'
 
-    pisa.CreatePDF(io.BytesIO(html.encode('utf-8')), dest=response, encoding='utf-8')
+    HTML(string=html, base_url=request.build_absolute_uri('/')).write_pdf(response)
     return response

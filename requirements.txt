@@ -1,39 +1,36 @@
-arabic-reshaper==3.0.0
-asgiref==3.11.1
-asn1crypto==1.5.1
-certifi==2026.2.25
-cffi==2.0.0
-charset-normalizer==3.4.7
-cryptography==46.0.7
-cssselect2==0.9.0
-Django==6.0.4
-djangorestframework==3.17.1
-et_xmlfile==2.0.0
-freetype-py==2.5.1
-html5lib==1.1
-idna==3.11
-lxml==6.0.4
-openpyxl==3.1.5
-oscrypto==1.3.0
-pillow==12.2.0
-psycopg2-binary==2.9.11
-pycairo==1.29.0
-pycparser==3.0
-pyHanko==0.34.1
-pyhanko-certvalidator==0.30.2
-pypdf==6.10.0
-python-bidi==0.6.7
-python-dotenv==1.2.2
-PyYAML==6.0.3
-reportlab==4.4.10
-requests==2.33.1
-rlPyCairo==0.4.0
-six==1.17.0
-sqlparse==0.5.5
-svglib==1.6.0
-tinycss2==1.5.1
-tzlocal==5.3.1
-uritools==6.0.1
-urllib3==2.6.3
-webencodings==0.5.1
-xhtml2pdf==0.2.17
+Django==6.0.4                  # Ana web framework (ORM, admin, auth, template).
+djangorestframework==3.17.1    # REST API katmanı (ViewSet, Serializer, Token auth).
+django-filter==25.2            # DRF filtre backend'i (?status=OPEN, ?created_at__gte=...).
+drf-spectacular==0.29.0        # OpenAPI 3.0 + Swagger UI/ReDoc dokümantasyonu.
+django-cors-headers==4.9.0     # CORS başlıkları; SPA/mobile API erişimi için.
+asgiref==3.11.1                # Django'nun async/sync köprüsü (Django bağımlılığı).
+sqlparse==0.5.5                # SQL formatlama; Django debug ve migration çıktıları.
+psycopg2-binary==2.9.11        # PostgreSQL sürücüsü (config/settings.py içinde aktif).
+python-dotenv==1.2.2           # .env dosyasından SECRET_KEY ve DB bilgilerini yükler.
+openpyxl==3.1.5                # XLSX okuma/yazma; rapor dışa aktarımında kullanılır.
+et_xmlfile==2.0.0              # openpyxl'in XML akışı için bağımlılığı.
+pillow==12.2.0                 # Görsel işleme; Django ImageField + WeasyPrint resim gömme.
+tinycss2==1.5.1                # Hafif CSS parser (WeasyPrint bağımlılığı).
+cssselect2==0.9.0              # CSS seçici parser; WeasyPrint stillendirme için.
+
+# === drf-spectacular alt bağımlılıkları ===
+PyYAML==6.0.3                  # OpenAPI şema YAML üretimi.
+inflection==0.5.1              # CamelCase ↔ snake_case (operationId üretimi).
+jsonschema==4.26.0             # OpenAPI şema doğrulama.
+jsonschema-specifications==2025.9.1
+referencing==0.37.0
+rpds-py==0.30.0
+attrs==26.1.0
+uritemplate==4.2.0             # URI template parser (path parametreleri için).
+
+# === WeasyPrint — HTML/CSS'den PDF üretimi (reports/views.py export_pdf) ===
+weasyprint==68.1               # Ana PDF kütüphanesi; xhtml2pdf'in yerini aldı.
+pydyf==0.12.1                  # WeasyPrint'in düşük seviyeli PDF yazma motoru.
+tinyhtml5==2.1.0               # WeasyPrint'in HTML5 parser'ı.
+pyphen==0.17.2                 # Heceleme kütüphanesi (WeasyPrint tipografi).
+fonttools==4.62.1              # Font okuma/yazma (WeasyPrint WOFF2 desteği).
+brotli==1.2.0                  # WOFF2 font sıkıştırma (fonttools bağımlılığı).
+zopfli==0.4.1                  # Zopfli sıkıştırma (fonttools bağımlılığı).
+cffi==2.0.0                    # C kütüphanelerine FFI köprüsü (WeasyPrint bağımlılığı).
+pycparser==3.0                 # C başlık dosyası parser'ı (cffi bağımlılığı).
+webencodings==0.5.1            # Karakter kodlama tabloları (cssselect2 bağımlılığı).

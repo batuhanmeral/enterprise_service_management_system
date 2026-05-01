@@ -3,33 +3,69 @@
 {% block title %}Raporlar — Talep Yönetim Sistemi{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
     <h1 class="h4 mb-0">
         <i class="bi bi-bar-chart-line me-2"></i>Raporlar ve İstatistikler
     </h1>
-    <div class="dropdown">
-        <button class="btn btn-dark dropdown-toggle" type="button" data-bs-toggle="dropdown">
-            <i class="bi bi-download me-1"></i>Dışa Aktar
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-            <li>
-                <a class="dropdown-item" href="{% url 'reports:export_csv' %}">
-                    <i class="bi bi-filetype-csv me-2"></i>CSV
+    <div class="d-flex flex-wrap gap-2 align-items-end">
+        <!-- Tarih aralığı filtresi -->
+        <form method="get" class="d-flex gap-2 align-items-end flex-wrap">
+            <div>
+                <label class="form-label mb-1 small text-muted">Başlangıç</label>
+                <input type="date" name="date_from" class="form-control form-control-sm"
+                       value="{{ date_from }}" style="width:145px;">
+            </div>
+            <div>
+                <label class="form-label mb-1 small text-muted">Bitiş</label>
+                <input type="date" name="date_to" class="form-control form-control-sm"
+                       value="{{ date_to }}" style="width:145px;">
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-dark">
+                <i class="bi bi-funnel me-1"></i>Filtrele
+            </button>
+            {% if date_from or date_to %}
+                <a href="{% url 'reports:dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x"></i>
                 </a>
-            </li>
-            <li>
-                <a class="dropdown-item" href="{% url 'reports:export_excel' %}">
-                    <i class="bi bi-file-earmark-excel me-2"></i>Excel (.xlsx)
-                </a>
-            </li>
-            <li>
-                <a class="dropdown-item" href="{% url 'reports:export_pdf' %}">
-                    <i class="bi bi-file-earmark-pdf me-2"></i>PDF
-                </a>
-            </li>
-        </ul>
+            {% endif %}
+        </form>
+        <!-- Dışa aktar — tarih filtresini parametrelerle geçirir -->
+        <div class="dropdown">
+            <button class="btn btn-dark btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="bi bi-download me-1"></i>Dışa Aktar
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                    <a class="dropdown-item" href="{% url 'reports:export_csv' %}?date_from={{ date_from }}&date_to={{ date_to }}">
+                        <i class="bi bi-filetype-csv me-2"></i>CSV
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="{% url 'reports:export_excel' %}?date_from={{ date_from }}&date_to={{ date_to }}">
+                        <i class="bi bi-file-earmark-excel me-2"></i>Excel (.xlsx)
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="{% url 'reports:export_pdf' %}?date_from={{ date_from }}&date_to={{ date_to }}">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>PDF
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
 </div>
+
+{% if date_from or date_to %}
+<div class="alert alert-info py-2 mb-3 d-flex align-items-center gap-2">
+    <i class="bi bi-funnel-fill"></i>
+    <span>
+        Filtre aktif:
+        {% if date_from %}<strong>{{ date_from }}</strong>{% endif %}
+        {% if date_from and date_to %} — {% endif %}
+        {% if date_to %}<strong>{{ date_to }}</strong>{% endif %}
+    </span>
+</div>
+{% endif %}
 
 <!-- Özet kartları -->
 <div class="row g-3 mb-4">

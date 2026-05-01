@@ -1,9 +1,9 @@
 from rest_framework.generics import (
     ListCreateAPIView, RetrieveUpdateDestroyAPIView,
-    ListAPIView, CreateAPIView, UpdateAPIView, DestroyAPIView,
 )
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 
+from config.permissions import IsAdmin, IsManagerOrAdmin
 from .models import Department, Category
 from .serializers import (
     DepartmentSerializer, DepartmentDetailSerializer, CategorySerializer,
@@ -12,21 +12,27 @@ from .serializers import (
 
 # Departman CRUD
 
-# Departman listeleme ve oluşturma
+# Departman listeleme (herkes) ve oluşturma (sadece Admin)
 class DepartmentListCreateAPIView(ListCreateAPIView):
     queryset = Department.objects.select_related('manager')
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated()]
+        return [IsAdmin()]
 
     def get_serializer_class(self):
-        if self.request.method == 'POST':
-            return DepartmentSerializer
         return DepartmentSerializer
 
 
-# Departman detay, güncelleme ve silme
+# Departman detay (herkes), güncelleme ve silme (sadece Admin)
 class DepartmentDetailAPIView(RetrieveUpdateDestroyAPIView):
     queryset = Department.objects.select_related('manager').prefetch_related('categories', 'personnel')
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated()]
+        return [IsAdmin()]
 
     def get_serializer_class(self):
         if self.request.method == 'GET':
@@ -36,12 +42,18 @@ class DepartmentDetailAPIView(RetrieveUpdateDestroyAPIView):
 
 # Kategori CRUD (departman bağlamında)
 
-# Departmana ait kategorileri listeleme ve oluşturma
+# Departmana ait kategorileri listeleme (herkes) ve oluşturma (Manager veya Admin)
 class CategoryListCreateAPIView(ListCreateAPIView):
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated()]
+        return [IsManagerOrAdmin()]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Category.objects.none()
         return Category.objects.filter(department_id=self.kwargs['dept_pk'])
 
     def perform_create(self, serializer):
@@ -49,8 +61,12 @@ class CategoryListCreateAPIView(ListCreateAPIView):
         serializer.save(department_id=self.kwargs['dept_pk'])
 
 
-# Kategori güncelleme ve silme
+# Kategori detay (herkes), güncelleme ve silme (Manager veya Admin)
 class CategoryDetailAPIView(RetrieveUpdateDestroyAPIView):
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticated]
     queryset = Category.objects.all()
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated()]
+        return [IsManagerOrAdmin()]

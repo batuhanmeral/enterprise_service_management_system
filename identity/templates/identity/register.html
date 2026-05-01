@@ -97,27 +97,15 @@
                             <input type="text"
                                    name="phone"
                                    id="id_phone"
-                                   class="form-control"
+                                   class="form-control {% if form.phone.errors %}is-invalid{% endif %}"
                                    value="{{ form.phone.value|default:'' }}"
-                                   placeholder="05XX XXX XX XX">
-                        </div>
-                    </div>
-
-                    <div class="row g-3 mb-3">
-                        <!-- Rol -->
-                        <div class="col-sm-6">
-                            <label for="{{ form.role.id_for_label }}" class="form-label">Rol</label>
-                            {{ form.role }}
-                            {% if form.role.errors %}
-                                <div class="invalid-feedback d-block">{{ form.role.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-                        <!-- Departman -->
-                        <div class="col-sm-6">
-                            <label for="{{ form.department.id_for_label }}" class="form-label">Departman <small class="text-muted">(opsiyonel)</small></label>
-                            {{ form.department }}
-                            {% if form.department.errors %}
-                                <div class="invalid-feedback d-block">{{ form.department.errors.0 }}</div>
+                                   placeholder="05XX XXX XX XX"
+                                   inputmode="numeric"
+                                   maxlength="20">
+                            {% if form.phone.errors %}
+                                <div class="invalid-feedback">{{ form.phone.errors.0 }}</div>
+                            {% else %}
+                                <small class="text-muted">11 haneli, "0" ile başlamalıdır.</small>
                             {% endif %}
                         </div>
                     </div>
@@ -130,9 +118,12 @@
                                id="id_password"
                                class="form-control {% if form.password.errors %}is-invalid{% endif %}"
                                placeholder="Şifre belirleyin"
+                               minlength="8"
                                required>
                         {% if form.password.errors %}
                             <div class="invalid-feedback">{{ form.password.errors.0 }}</div>
+                        {% else %}
+                            <small class="text-muted">En az 8 karakter olmalıdır.</small>
                         {% endif %}
                     </div>
 

@@ -12,6 +12,8 @@ urlpatterns = [
     path('<int:pk>/delete/', views.DepartmentDeleteView.as_view(), name='department_delete'),
     # AJAX: Departmana ait kategorileri JSON olarak döndürür
     path('<int:pk>/categories/', views.department_categories_api, name='department_categories_api'),
+    # Personel ekleme (boştaki AGENT kullanıcıları)
+    path('<int:pk>/personnel/add/', views.department_add_personnel, name='department_add_personnel'),
     # Kategori CRUD (departman bağlamında)
     path('<int:dept_pk>/categories/create/', views.CategoryCreateView.as_view(), name='category_create'),
     path('categories/<int:pk>/update/', views.CategoryUpdateView.as_view(), name='category_update'),

@@ -1,4 +1,5 @@
-from rest_framework import status
+from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -14,6 +15,8 @@ class NotificationListAPIView(ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Notification.objects.none()
         return Notification.objects.filter(
             recipient=self.request.user,
         ).select_related('ticket')
@@ -34,6 +37,8 @@ class NotificationDetailAPIView(RetrieveAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Notification.objects.none()
         return Notification.objects.filter(
             recipient=self.request.user,
         ).select_related('ticket')
@@ -47,6 +52,7 @@ class NotificationDetailAPIView(RetrieveAPIView):
 
 
 # Tek bildirimi okundu olarak işaretle
+@extend_schema(tags=['notifications'], request=None, responses={200: OpenApiResponse(description='Okundu işaretlendi.')})
 class NotificationMarkReadAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -70,6 +76,11 @@ class NotificationMarkReadAPIView(APIView):
 
 
 # Tüm bildirimleri toplu okundu olarak işaretle
+@extend_schema(
+    tags=['notifications'],
+    request=None,
+    responses={200: inline_serializer(name='MarkAllReadResponse', fields={'count': serializers.IntegerField()})},
+)
 class NotificationMarkAllReadAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -83,6 +94,7 @@ class NotificationMarkAllReadAPIView(APIView):
 
 
 # Bildirim silme
+@extend_schema(tags=['notifications'], request=None, responses={204: OpenApiResponse()})
 class NotificationDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -106,6 +118,10 @@ class NotificationDeleteAPIView(APIView):
 
 
 # Okunmamış bildirim sayısı — navbar badge için
+@extend_schema(
+    tags=['notifications'],
+    responses={200: inline_serializer(name='UnreadCountResponse', fields={'unread_count': serializers.IntegerField()})},
+)
 class NotificationUnreadCountAPIView(APIView):
     permission_classes = [IsAuthenticated]
 

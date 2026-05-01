@@ -1,6 +1,34 @@
+import re
+
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .models import User, Role
+
+
+# Telefon TR formatı: 11 hane, "0" ile başlamalı (SSR formundaki kuralla aynı)
+_PHONE_DIGIT_COUNT = 11
+
+
+def _normalize_phone(value):
+    if value is None or value == '':
+        return None
+    digits = re.sub(r'\D', '', value)
+    if len(digits) != _PHONE_DIGIT_COUNT:
+        raise serializers.ValidationError(
+            f'Telefon numarası {_PHONE_DIGIT_COUNT} haneli olmalıdır.'
+        )
+    if not digits.startswith('0'):
+        raise serializers.ValidationError('Telefon numarası "0" ile başlamalıdır.')
+    return digits
+
+
+def _validate_password_strength(password):
+    try:
+        validate_password(password)
+    except DjangoValidationError as e:
+        raise serializers.ValidationError(list(e.messages))
 
 
 # Temel kullanıcı bilgileri — liste ve nested referanslarda kullanılır
@@ -18,7 +46,7 @@ class UserSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'username']
 
-    def get_full_name(self, obj):
+    def get_full_name(self, obj) -> str:
         return obj.get_full_name() or obj.username
 
 
@@ -30,7 +58,7 @@ class UserShortSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'full_name']
 
-    def get_full_name(self, obj):
+    def get_full_name(self, obj) -> str:
         return obj.get_full_name() or obj.username
 
 
@@ -56,6 +84,13 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'phone', 'role', 'department', 'password',
         ]
 
+    def validate_phone(self, value):
+        return _normalize_phone(value)
+
+    def validate_password(self, value):
+        _validate_password_strength(value)
+        return value
+
     def create(self, validated_data):
         password = validated_data.pop('password')
         user = User(**validated_data)
@@ -73,6 +108,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             'phone', 'role', 'department', 'is_active',
         ]
 
+    def validate_phone(self, value):
+        return _normalize_phone(value)
+
 
 # Giriş (login) serializer'ı
 class LoginSerializer(serializers.Serializer):
@@ -89,9 +127,19 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ['username', 'first_name', 'last_name', 'email', 'phone', 'password', 'password_confirm']
 
+    def validate_username(self, value):
+        username = (value or '').strip()
+        if User.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError('Bu kullanıcı adı zaten kullanılıyor.')
+        return username
+
+    def validate_phone(self, value):
+        return _normalize_phone(value)
+
     def validate(self, data):
         if data['password'] != data['password_confirm']:
             raise serializers.ValidationError({'password_confirm': 'Şifreler eşleşmiyor.'})
+        _validate_password_strength(data['password'])
         return data
 
     def create(self, validated_data):
@@ -102,6 +150,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Hesap pasif oluşturulur — admin onayı gerekir
         user.is_active = False
         user.role = Role.EMPLOYEE
+        user.department = None
         user.save()
         return user
 
@@ -110,4 +159,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class ProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'phone']
+        fields = ['first_name', 'last_name', 'email', 'phone', 'avatar']
+
+    def validate_phone(self, value):
+        return _normalize_phone(value)

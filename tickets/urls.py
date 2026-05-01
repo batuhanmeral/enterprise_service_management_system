@@ -27,4 +27,10 @@ urlpatterns = [
 
     # Bilet transfer
     path('<int:pk>/transfer/', views.ticket_transfer_view, name='ticket_transfer'),
+
+    # Bilet yorum ekleme
+    path('<int:pk>/comment/', views.ticket_add_comment_view, name='ticket_add_comment'),
+
+    # Bilet yeniden açma (CLOSED -> OPEN)
+    path('<int:pk>/reopen/', views.ticket_reopen_view, name='ticket_reopen'),
 ]

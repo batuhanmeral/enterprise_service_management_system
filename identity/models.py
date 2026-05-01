@@ -13,6 +13,14 @@ class Role(models.TextChoices):
 # Django AbstractUser genişletilmiş kullanıcı modeli
 class User(AbstractUser):
 
+    # Kullanıcının profil fotoğrafı
+    avatar = models.ImageField(
+        upload_to='avatars/',
+        blank=True,
+        null=True,
+        verbose_name='Profil Fotoğrafı',
+    )
+
     # Kullanıcının telefon numarası
     phone = models.CharField(
         max_length=20,
@@ -44,6 +52,9 @@ class User(AbstractUser):
         verbose_name = 'Kullanıcı'
         verbose_name_plural = 'Kullanıcılar'
         ordering = ['username']
+        indexes = [
+            models.Index(fields=['role', 'department', 'is_active'], name='user_role_dept_active_idx'),
+        ]
 
     # Model objesinin sistemde metin olarak nasıl temsil edileceğini belirleyen fonksiyon
     def __str__(self):

@@ -1,5 +1,6 @@
 from django.db.models import Count, Q
 
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,6 +14,7 @@ from notifications.serializers import NotificationSerializer
 
 
 # Rol bazlı ana sayfa dashboard'u — JSON
+@extend_schema(tags=['dashboard'], responses={200: OpenApiResponse(description='Rol bazlı dashboard verisi')})
 class DashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
